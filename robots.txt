@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+Sitemap: https://chaskabox.online/sitemap.xml
+Sitemap: https://chaskabox.online/sitemap-products.xml

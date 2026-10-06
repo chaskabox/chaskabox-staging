@@ -1,0 +1,290 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<meta name="referrer" content="no-referrer">
+<title>ChaskaBox Admin Console</title>
+<link rel="stylesheet" href="/admin.css?v=1">
+</head>
+<body>
+<div class="admin-shell">
+  <aside class="admin-sidebar" id="adminSidebar">
+    <a class="admin-brand" href="/" target="_blank" rel="noopener">
+      <img src="/images/logo-navy.png" alt="ChaskaBox">
+      <span>Admin Console</span>
+    </a>
+    <nav class="admin-nav" aria-label="Admin sections">
+      <button class="admin-nav-btn active" data-view="dashboard"><span>▦</span> Dashboard</button>
+      <button class="admin-nav-btn" data-view="orders"><span>▤</span> Orders <b class="nav-count" id="orderNavCount">—</b></button>
+      <button class="admin-nav-btn" data-view="products"><span>◫</span> Products <b class="nav-count" id="productNavCount">—</b></button>
+      <button class="admin-nav-btn" data-view="boxes"><span>📦</span> Chaska Box Builder</button>
+      <button class="admin-nav-btn" data-view="homepage"><span>⌂</span> Homepage</button>
+      <button class="admin-nav-btn" data-view="customers"><span>♙</span> Customers</button>
+      <button class="admin-nav-btn" data-view="reviews"><span>★</span> Reviews</button>
+      <button class="admin-nav-btn" data-view="media"><span>▣</span> Media</button>
+      <button class="admin-nav-btn" data-view="preview"><span>◉</span> Site Preview</button>
+      <button class="admin-nav-btn" data-view="assistant"><span>✦</span> Admin Copilot</button>
+      <button class="admin-nav-btn" data-view="settings"><span>⚙</span> Settings</button>
+      <button class="admin-nav-btn" data-view="security"><span>🔐</span> Security & Audit</button>
+    </nav>
+    <div class="admin-sidebar-foot">
+      <div class="backend-state warning" id="backendState"><span></span><b>Review mode</b><small>Secure backend not connected</small></div>
+      <a href="/" target="_blank" rel="noopener">↗ Open live storefront</a>
+    </div>
+  </aside>
+
+  <div class="admin-main">
+    <header class="admin-topbar">
+      <button class="sidebar-toggle" id="sidebarToggle" aria-label="Open admin navigation">☰</button>
+      <div>
+        <h1 id="viewTitle">Dashboard</h1>
+        <p id="viewSubtitle">Store health, catalogue and order overview.</p>
+      </div>
+      <div class="admin-top-actions">
+        <button class="btn secondary" id="globalPreviewBtn">Preview site</button>
+        <button class="btn primary" id="quickAddProductBtn">+ Add product</button>
+      </div>
+    </header>
+
+    <main class="admin-content">
+      <div class="security-notice" id="securityNotice">
+        <strong>Review build:</strong> this dashboard UI is intentionally not allowed to make production changes until Muse connects authenticated admin APIs, Supabase RLS and Cloudflare Access. You can inspect products, build drafts and preview changes safely.
+      </div>
+
+      <!-- DASHBOARD -->
+      <section class="admin-view active" id="view-dashboard" data-title="Dashboard" data-subtitle="Store health, catalogue and order overview.">
+        <div class="metric-grid">
+          <article class="metric-card"><span class="metric-icon">◫</span><div><small>Products</small><strong id="metricProducts">—</strong><em id="metricProductsNote">catalogue items</em></div></article>
+          <article class="metric-card"><span class="metric-icon">📦</span><div><small>Chaska Boxes</small><strong id="metricBundles">—</strong><em>bundle products</em></div></article>
+          <article class="metric-card"><span class="metric-icon">▤</span><div><small>Open Orders</small><strong id="metricOrders">—</strong><em>needs backend</em></div></article>
+          <article class="metric-card"><span class="metric-icon">₹</span><div><small>Revenue</small><strong id="metricRevenue">—</strong><em>needs central orders</em></div></article>
+        </div>
+
+        <div class="admin-grid two">
+          <section class="panel">
+            <div class="panel-head"><div><h2>Quick actions</h2><p>Common store tasks.</p></div></div>
+            <div class="quick-actions">
+              <button data-jump="products" data-action="add-product">＋ Add new product</button>
+              <button data-jump="boxes">📦 Build a Chaska Box</button>
+              <button data-jump="orders">▤ Review orders</button>
+              <button data-jump="homepage">⌂ Curate homepage</button>
+              <button data-jump="preview">◉ Preview storefront</button>
+              <button data-jump="assistant">✦ Ask Admin Copilot</button>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><h2>Store readiness</h2><p>Items required before scaling paid traffic.</p></div></div>
+            <ul class="readiness-list">
+              <li class="done"><span>✓</span><div><b>Frontend UX refresh</b><small>V3 polish implemented</small></div></li>
+              <li class="done"><span>✓</span><div><b>Bank Transfer</b><small>Checkout UI integrated</small></div></li>
+              <li class="pending"><span>!</span><div><b>Central order database</b><small>Muse/Supabase connection required</small></div></li>
+              <li class="pending"><span>!</span><div><b>Secure admin authorization</b><small>Cloudflare Access + admin role required</small></div></li>
+              <li class="pending"><span>!</span><div><b>Server-authoritative pricing</b><small>Move totals to /api/orders</small></div></li>
+            </ul>
+          </section>
+        </div>
+
+        <section class="panel">
+          <div class="panel-head"><div><h2>Catalogue snapshot</h2><p>Current products loaded from products.json.</p></div><button class="text-btn" data-jump="products">Manage products →</button></div>
+          <div class="category-bars" id="categoryBars"></div>
+        </section>
+      </section>
+
+      <!-- ORDERS -->
+      <section class="admin-view" id="view-orders" data-title="Orders" data-subtitle="Manage fulfilment, payment verification and customer communication.">
+        <div class="toolbar">
+          <div class="searchbox"><span>⌕</span><input id="orderSearch" placeholder="Search order, customer, phone…" disabled></div>
+          <select id="orderStatusFilter" disabled><option>All statuses</option><option>New</option><option>Awaiting payment</option><option>Payment submitted</option><option>Payment verified</option><option>Sourcing</option><option>Packed</option><option>Dispatched</option><option>Delivered</option><option>Cancelled</option></select>
+          <button class="btn secondary" disabled>Export CSV</button>
+        </div>
+        <div class="panel empty-backend">
+          <div class="empty-icon">▤</div>
+          <h2>Central orders are not connected in this review copy</h2>
+          <p>When Muse connects the secure order API, this screen will show every guest and account order in one place with payment and fulfilment controls.</p>
+          <div class="feature-chip-row"><span>Payment verification</span><span>Status timeline</span><span>Customer WhatsApp</span><span>Invoice/packing slip</span><span>Refund/cancel</span><span>CSV export</span></div>
+        </div>
+        <section class="panel">
+          <div class="panel-head"><div><h2>Required order workflow</h2><p>The final backend should use these explicit states.</p></div></div>
+          <div class="status-flow"><span>New</span><i>→</i><span>Payment / COD confirmed</span><i>→</i><span>Sourcing</span><i>→</i><span>Packed</span><i>→</i><span>Dispatched</span><i>→</i><span>Delivered</span></div>
+        </section>
+      </section>
+
+      <!-- PRODUCTS -->
+      <section class="admin-view" id="view-products" data-title="Products" data-subtitle="Search, preview, edit, hide, archive and create catalogue items.">
+        <div class="toolbar product-toolbar">
+          <div class="searchbox"><span>⌕</span><input id="productSearch" placeholder="Search name, category, pack…"></div>
+          <select id="productCategory"><option value="">All categories</option></select>
+          <select id="productVisibility"><option value="">All products</option><option value="visible">Visible</option><option value="hidden">Hidden</option><option value="bundle">Chaska Boxes</option><option value="archived">Archived</option></select>
+          <button class="btn primary" id="addProductBtn">+ Add product</button>
+        </div>
+        <div class="bulkbar hidden" id="bulkBar"><b id="bulkCount">0 selected</b><button class="btn secondary" data-bulk="show">Show</button><button class="btn secondary" data-bulk="hide">Hide</button><button class="btn danger" data-bulk="archive">Archive</button><button class="text-btn" data-bulk="clear">Clear</button></div>
+        <div class="product-admin-grid" id="productAdminGrid"></div>
+        <div class="pagination-row"><span id="productResultCount"></span><button class="btn secondary" id="loadMoreProducts">Load more</button></div>
+      </section>
+
+      <!-- BOX BUILDER -->
+      <section class="admin-view" id="view-boxes" data-title="Chaska Box Builder" data-subtitle="Combine existing products into curated boxes and preview them before publishing.">
+        <div class="builder-layout">
+          <section class="panel builder-products">
+            <div class="panel-head"><div><h2>1. Choose products</h2><p>Select snacks and quantities for the box.</p></div></div>
+            <div class="searchbox"><span>⌕</span><input id="boxProductSearch" placeholder="Search products to add…"></div>
+            <div id="boxProductList" class="box-product-list"></div>
+          </section>
+          <section class="panel builder-summary">
+            <div class="panel-head"><div><h2>2. Build your box</h2><p>Set the customer-facing name and price.</p></div></div>
+            <label>Box name<input id="boxName" placeholder="e.g. Bachpan Chaska Box"></label>
+            <label>Short description<textarea id="boxDescription" rows="3" placeholder="What's special about this box?"></textarea></label>
+            <div class="form-two"><label>Selling price (Rs.)<input id="boxPrice" type="number" min="0" placeholder="0"></label><label>Badge<select id="boxBadge"><option value="">None</option><option>New</option><option>Sale</option><option>Chaska Pick</option><option>Limited</option></select></label></div>
+            <div class="builder-items" id="boxSelectedItems"><p class="muted">No products selected yet.</p></div>
+            <div class="builder-totals"><span>Items retail value</span><b id="boxRetailValue">Rs. 0</b><span>Customer price</span><b id="boxCustomerPrice">Rs. 0</b><span>Saving</span><b id="boxSaving">Rs. 0</b></div>
+            <div class="action-row"><button class="btn secondary" id="previewBoxBtn">Preview box</button><button class="btn primary" id="saveBoxDraftBtn">Save draft</button></div>
+            <p class="safe-note">Drafts remain in this review browser only. Publishing must go through the secure admin API.</p>
+          </section>
+        </div>
+      </section>
+
+      <!-- HOMEPAGE -->
+      <section class="admin-view" id="view-homepage" data-title="Homepage" data-subtitle="Control what customers see first without editing source code.">
+        <div class="admin-grid two">
+          <section class="panel">
+            <div class="panel-head"><div><h2>Homepage sections</h2><p>Final backend should allow ordering and visibility controls.</p></div></div>
+            <div class="section-manager" id="sectionManager">
+              <div><span class="drag">⋮⋮</span><b>Hero</b><em>Always visible</em><button disabled>On</button></div>
+              <div><span class="drag">⋮⋮</span><b>Shop by Category</b><em>Automatic categories</em><button disabled>On</button></div>
+              <div><span class="drag">⋮⋮</span><b>Chaska Picks</b><em>Curated products</em><button disabled>On</button></div>
+              <div><span class="drag">⋮⋮</span><b>Chaska Boxes</b><em>Bundle products</em><button disabled>On</button></div>
+              <div><span class="drag">⋮⋮</span><b>Chatpata Picks</b><em>Curated products</em><button disabled>On</button></div>
+              <div><span class="drag">⋮⋮</span><b>How ChaskaBox Works</b><em>Brand story</em><button disabled>On</button></div>
+              <div><span class="drag">⋮⋮</span><b>FAQ</b><em>Customer reassurance</em><button disabled>On</button></div>
+            </div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><h2>Hero controls</h2><p>Backend-managed content fields planned for Muse.</p></div></div>
+            <label>Eyebrow<input value="PAKISTAN'S NOSTALGIA SNACK STORE" disabled></label>
+            <label>Headline<input value="Bachpan Ka Zaiqa, Ab Ghar Baithe." disabled></label>
+            <label>Supporting text<textarea rows="3" disabled>Pakistan ke favourite snacks, sourced after your order and delivered to your doorstep.</textarea></label>
+            <div class="action-row"><button class="btn secondary" data-jump="preview">Preview homepage</button><button class="btn primary" disabled>Save homepage</button></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- CUSTOMERS -->
+      <section class="admin-view" id="view-customers" data-title="Customers" data-subtitle="Customer history, addresses, order value and support context.">
+        <div class="panel empty-backend"><div class="empty-icon">♙</div><h2>Customer management needs the central order database</h2><p>The final console will show customer order history, lifetime spend, last order, support notes and verified contact details without exposing data to unauthorized staff.</p></div>
+      </section>
+
+      <!-- REVIEWS -->
+      <section class="admin-view" id="view-reviews" data-title="Reviews" data-subtitle="Moderate genuine shared reviews after Supabase review storage is enabled.">
+        <div class="panel empty-backend"><div class="empty-icon">★</div><h2>No fake review system</h2><p>Reviews will only appear here after Muse connects real shared reviews. Admin can approve, reject, reply and mark verified purchases. The storefront should never fabricate ratings.</p></div>
+      </section>
+
+      <!-- MEDIA -->
+      <section class="admin-view" id="view-media" data-title="Media Library" data-subtitle="Manage product images, logos and promotional assets safely.">
+        <div class="panel empty-backend"><div class="empty-icon">▣</div><h2>Media API not connected yet</h2><p>Final version should upload images to controlled storage, optimize WebP/AVIF sizes, preserve originals, and prevent arbitrary executable file uploads.</p></div>
+      </section>
+
+      <!-- PREVIEW -->
+      <section class="admin-view" id="view-preview" data-title="Site Preview" data-subtitle="Inspect storefront routes at desktop, tablet and mobile widths.">
+        <div class="preview-toolbar">
+          <select id="previewRoute"><option value="/">Homepage</option><option value="/shop/">Shop</option><option value="/bundles/">Chaska Boxes</option><option value="/cart/">Cart</option><option value="/checkout.html">Checkout</option></select>
+          <div class="viewport-switch"><button data-width="100%" class="active">Desktop</button><button data-width="768px">Tablet</button><button data-width="390px">Mobile</button></div>
+          <button class="btn secondary" id="refreshPreview">↻ Refresh</button>
+          <a class="btn secondary" id="openPreviewNew" href="/" target="_blank" rel="noopener">↗ New tab</a>
+        </div>
+        <div class="preview-stage"><div class="preview-frame-wrap" id="previewFrameWrap"><iframe id="sitePreview" title="ChaskaBox storefront preview" src="/"></iframe></div></div>
+      </section>
+
+      <!-- AI -->
+      <section class="admin-view" id="view-assistant" data-title="Admin Copilot" data-subtitle="AI-assisted catalogue and merchandising work — always reviewed by you before saving.">
+        <div class="admin-grid two copilot-grid">
+          <section class="panel">
+            <div class="panel-head"><div><h2>What should Copilot help with?</h2><p>No AI key should ever be exposed in this page. Muse must connect this through a protected server endpoint.</p></div></div>
+            <div class="ai-shortcuts">
+              <button data-ai="description">Write a better product description</button>
+              <button data-ai="seo">Create SEO title + meta description</button>
+              <button data-ai="bundle">Suggest a Chaska Box from selected products</button>
+              <button data-ai="category">Suggest category / badge / flavour tags</button>
+              <button data-ai="homepage">Suggest homepage merchandising</button>
+              <button data-ai="support">Draft a customer support reply</button>
+            </div>
+            <label>Instructions<textarea id="aiPrompt" rows="6" placeholder="Example: Write a concise nostalgic product description for Cocomo, mentioning pack size but no claims we cannot verify."></textarea></label>
+            <button class="btn primary" id="runAiBtn">✦ Generate draft</button>
+          </section>
+          <section class="panel ai-output-panel">
+            <div class="panel-head"><div><h2>Draft output</h2><p>AI output is never auto-published.</p></div><button class="text-btn" id="copyAiOutput">Copy</button></div>
+            <div class="ai-output" id="aiOutput"><p class="muted">Connect `/api/admin/ai` through Muse to generate secure server-side drafts here.</p></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- SETTINGS -->
+      <section class="admin-view" id="view-settings" data-title="Settings" data-subtitle="Payments, shipping and public store configuration.">
+        <div class="admin-grid two">
+          <section class="panel">
+            <div class="panel-head"><div><h2>Payments</h2><p>Public receiving details may be shown; secrets must never be placed here.</p></div></div>
+            <div class="setting-row"><div><b>Cash on Delivery</b><small>Delivery Rs. 300</small></div><span class="pill on">Enabled</span></div>
+            <div class="setting-row"><div><b>JazzCash</b><small>Prepaid · free delivery Rs. 5,000+</small></div><span class="pill on">Enabled</span></div>
+            <div class="setting-row"><div><b>Bank Transfer</b><small>Punjab Bank · prepaid verification</small></div><span class="pill on">Enabled</span></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><h2>Shipping</h2><p>Current customer-facing rules.</p></div></div>
+            <div class="setting-row"><div><b>Standard delivery</b><small>Rs. 300</small></div></div>
+            <div class="setting-row"><div><b>Free prepaid threshold</b><small>Rs. 5,000</small></div></div>
+            <div class="setting-row"><div><b>Estimated delivery</b><small>4–7 days</small></div></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- SECURITY -->
+      <section class="admin-view" id="view-security" data-title="Security & Audit" data-subtitle="Admin authorization, destructive-action safety and activity history.">
+        <div class="admin-grid two">
+          <section class="panel">
+            <div class="panel-head"><div><h2>Required production protection</h2></div></div>
+            <ul class="security-checks">
+              <li><span class="bad">Required</span> Cloudflare Access protects `/admin*`</li>
+              <li><span class="bad">Required</span> Supabase Auth verifies an approved admin role</li>
+              <li><span class="bad">Required</span> RLS blocks non-admin catalogue/order writes</li>
+              <li><span class="bad">Required</span> `/api/admin/*` re-verifies authorization server-side</li>
+              <li><span class="good">Planned</span> Archive/restore instead of accidental hard delete</li>
+              <li><span class="good">Planned</span> Every admin change written to audit log</li>
+            </ul>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><h2>Audit log</h2><p>Who changed what and when.</p></div></div>
+            <div class="empty-mini">Audit history will appear after backend integration.</div>
+          </section>
+        </div>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- PRODUCT EDITOR -->
+<div class="admin-modal" id="productEditor" aria-hidden="true">
+  <div class="modal-backdrop" data-close-modal></div>
+  <section class="admin-modal-card" role="dialog" aria-modal="true" aria-labelledby="productEditorTitle">
+    <div class="modal-head"><div><small id="productEditorMode">PRODUCT</small><h2 id="productEditorTitle">Edit product</h2></div><button class="icon-btn" data-close-modal aria-label="Close product editor">×</button></div>
+    <div class="editor-grid">
+      <form id="productForm" class="editor-form">
+        <input type="hidden" id="editProductId">
+        <label>Product name<input id="editName" required></label>
+        <div class="form-two"><label>Price (Rs.)<input id="editPrice" type="number" min="0" required></label><label>Old price (Rs.)<input id="editOldPrice" type="number" min="0"></label></div>
+        <div class="form-two"><label>Category<select id="editCategory"></select></label><label>Pack / size<input id="editPack"></label></div>
+        <div class="form-two"><label>Badge<select id="editBadge"><option value="">None</option><option>Sale</option><option>New</option><option>Chaska Pick</option><option>Limited</option></select></label><label>Visibility<select id="editVisibility"><option value="visible">Visible</option><option value="hidden">Hidden</option></select></label></div>
+        <label>Description<textarea id="editDescription" rows="5"></textarea></label>
+        <label>Image path<input id="editImage" placeholder="/images/p123.webp"></label>
+        <label class="checkline"><input type="checkbox" id="editBundle"> This product is a Chaska Box / bundle</label>
+        <div class="action-row sticky-actions"><button type="button" class="btn secondary" id="aiImproveProduct">✦ Improve with Copilot</button><button type="button" class="btn danger" id="archiveProduct">Archive</button><button class="btn primary" type="submit">Save draft</button></div>
+        <p class="safe-note">Draft saves are local to this review browser until the secure backend is connected.</p>
+      </form>
+      <aside class="product-live-preview"><small>CUSTOMER PREVIEW</small><div id="productPreviewCard"></div></aside>
+    </div>
+  </section>
+</div>
+
+<div class="admin-toast" id="adminToast" role="status" aria-live="polite"></div>
+<script src="/admin.js?v=1" defer></script>
+</body>
+</html>
