@@ -170,14 +170,30 @@ async function copyBankAccount(){
   }
 }
 
-async function sendOrderEmail(payload){
+async function placeOrderViaAPI(payload) {
+  // Server-authoritative order creation via Cloudflare Function.
+  // Returns {ok, data} — data is the API response on success.
   try {
-    const res = await fetch('https://formsubmit.co/ajax/' + ORDER_EMAIL, {
-      method: 'POST', headers: {'Content-Type':'application/json','Accept':'application/json'},
+    const res = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    return res.ok;
-  } catch(e) { return false; }
+    const data = await res.json().catch(() => ({}));
+    if (res.ok) return { ok: true, data };
+    // Surface validation errors clearly
+    const msg = data?.error?.message || 'Order could not be placed. Please try again.';
+    return { ok: false, error: msg, details: data?.error?.details };
+  } catch (e) {
+    return { ok: false, error: 'Network error. Please check your connection and try again.' };
+  }
+}
+
+function uuidv4() {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
 }
 
 async function saveSupabaseOrder(order){
@@ -273,43 +289,63 @@ async function placeOrder() {
   const note = ($('#f_note')?.value || '').trim();
   const phone = phoneDigits($('#f_phone').value);
   const turnstileToken = (typeof turnstile !== 'undefined' && turnstile.getResponse) ? turnstile.getResponse() : '';
-  const order = {
-    no:ono, name:$('#f_name').value.trim(), phone, addr:$('#f_addr').value.trim(), city:$('#f_city').value.trim(),
-    items:itemRows, sub, del, total, pay_method: PAY === 'cod' ? 'COD' : (PAY === 'jazzcash' ? 'JazzCash' : 'Bank Transfer'),
-    payment_reference:reference, video:wantVideo, note, turnstile_token:turnstileToken
+
+  // Build server-authoritative API payload (contract §4).
+  // Prices/totals are IGNORED by the server — it recalculates from the DB.
+  const apiPayload = {
+    idempotency_key: uuidv4(),
+    items: itemRows.map(i => ({ product_id: i.id, qty: i.qty })),
+    customer: {
+      name: $('#f_name').value.trim(),
+      phone: phone,
+      address: $('#f_addr').value.trim(),
+      city: $('#f_city').value.trim()
+    },
+    payment_method: PAY === 'cod' ? 'cod' : (PAY === 'jazzcash' ? 'jazzcash' : 'bank_transfer'),
+    transaction_reference: reference,
+    turnstile_token: turnstileToken,
+    customer_note: note || undefined
   };
 
-  const msg = `NEW ORDER — ${ono}\nDate: ${new Date().toLocaleString('en-PK',{timeZone:'Asia/Karachi'})}\n\nCUSTOMER\nName: ${order.name}\nPhone: ${phone}\nAddress: ${order.addr}\nCity: ${order.city}\nOrder note: ${note || '—'}\nPacking video request: ${wantVideo ? 'YES' : 'No'}\n\nITEMS\n${items.join('\n')}\n\nSubtotal: Rs. ${sub.toLocaleString('en-PK')}\nDelivery: ${del===0?'FREE':'Rs. '+del.toLocaleString('en-PK')}\nTOTAL: Rs. ${total.toLocaleString('en-PK')}\nPayment: ${payLabel}\nPayment reference: ${reference || 'N/A'}\nPayment status: ${isPrepaid() ? 'AWAITING VERIFICATION' : 'COD / PENDING'}`;
+  // Server-authoritative order creation. Cart is cleared ONLY on API success.
+  const apiResult = await placeOrderViaAPI(apiPayload);
 
-  const [sent, centralSaved] = await Promise.all([
-    sendOrderEmail({_subject:`New Order ${ono} — ChaskaBox`,_template:'table',message:msg,name:order.name,order:ono}),
-    saveSupabaseOrder(order)
-  ]);
-
-  // Do not show a successful order unless at least one real store-side destination acknowledged it.
-  if (!sent && !centralSaved) {
-    showOrderError('We could not safely record your order. Your bag has NOT been cleared. Please retry, or WhatsApp 0332-0005381 for help.');
-    placingOrder=false; btn.disabled=false; btn.textContent='Place Order →';
+  if (!apiResult.ok) {
+    showOrderError(apiResult.error || 'We could not safely record your order. Your bag has NOT been cleared. Please retry, or WhatsApp 0332-0005381 for help.');
+    placingOrder = false; btn.disabled = false; btn.textContent = 'Place Order →';
     return;
   }
+
+  // Success — use server-returned order number and total (authoritative).
+  const srv = apiResult.data;
+  const finalOrderNo = srv.order_number || ono;
+  const finalTotal = typeof srv.total === 'number' ? srv.total : total;
+
+  const order = {
+    no: finalOrderNo, name: $('#f_name').value.trim(), phone,
+    addr: $('#f_addr').value.trim(), city: $('#f_city').value.trim(),
+    items: itemRows, sub, del, total: finalTotal,
+    pay_method: PAY === 'cod' ? 'COD' : (PAY === 'jazzcash' ? 'JazzCash' : 'Bank Transfer'),
+    payment_reference: reference, video: wantVideo, note,
+    payment_status: srv.payment_status, fulfilment_status: srv.fulfilment_status
+  };
 
   saveLocalPurchaseSummary(order);
   CART = {}; localStorage.removeItem('chaskabox-cart');
   $('#coMain').style.display = 'none'; $('#coDone').style.display = '';
-  $('#doneNo').textContent = ono;
-  if ($('#doneTotal')) $('#doneTotal').textContent = fmt(total);
+  $('#doneNo').textContent = finalOrderNo;
+  if ($('#doneTotal')) $('#doneTotal').textContent = fmt(finalTotal);
   if ($('#donePayment')) $('#donePayment').textContent = PAYMENT_LABELS[PAY] || PAY;
   if ($('#doneStatus')) $('#doneStatus').textContent = isPrepaid() ? 'Awaiting payment verification' : 'Order received · COD pending';
-  if ($('#doneWhatsApp')) $('#doneWhatsApp').href = 'https://wa.me/923320005381?text=' + encodeURIComponent('Salam ChaskaBox, I need help with order '+ono);
+  if ($('#doneWhatsApp')) $('#doneWhatsApp').href = 'https://wa.me/923320005381?text=' + encodeURIComponent('Salam ChaskaBox, I need help with order '+finalOrderNo);
 
   if (PAY === 'cod') {
-    $('#doneMsg').innerHTML = `We'll contact <b>${esc(phone)}</b> if confirmation is needed, then prepare your order for dispatch. Amount due on delivery: <b>${fmt(total)}</b>.`;
+    $('#doneMsg').innerHTML = `We'll contact <b>${esc(phone)}</b> if confirmation is needed, then prepare your order for dispatch. Amount due on delivery: <b>${fmt(finalTotal)}</b>.`;
   } else if (PAY === 'jazzcash') {
-    $('#doneMsg').innerHTML = `Your JazzCash reference <b>${esc(reference)}</b> has been submitted for verification. Amount: <b>${fmt(total)}</b>. We'll prepare the order after payment is verified.`;
+    $('#doneMsg').innerHTML = `Your JazzCash reference <b>${esc(reference)}</b> has been submitted for verification. Amount: <b>${fmt(finalTotal)}</b>. We'll prepare the order after payment is verified.`;
   } else {
-    $('#doneMsg').innerHTML = `Your bank-transfer reference <b>${esc(reference)}</b> has been submitted for verification. Amount: <b>${fmt(total)}</b>. We'll prepare the order after payment is verified.`;
+    $('#doneMsg').innerHTML = `Your bank-transfer reference <b>${esc(reference)}</b> has been submitted for verification. Amount: <b>${fmt(finalTotal)}</b>. We'll prepare the order after payment is verified.`;
   }
-  if (!centralSaved) $('#doneMsg').innerHTML += '<br><br><small>Order notification was received by the store; account order history may update later.</small>';
   if (wantVideo) $('#doneMsg').innerHTML += '<br><br>🎬 <b>Packing video requested.</b> We will try to send a short clip on WhatsApp if operations allow.';
   celebrateOrder();
   window.scrollTo({top:0,behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'});
