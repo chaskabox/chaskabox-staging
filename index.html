@@ -43,9 +43,10 @@
       <a href="/bundles/">Chaska Boxes</a>
       <a href="/shop/" onclick="goBadge('Sale');return false">Deals</a>
     </nav>
-    <form class="header-search" role="search" onsubmit="submitHeaderSearch(event)">
+    <form class="header-search" role="search" onsubmit="submitHeaderSearch(event)" style="position:relative">
       <label class="sr-only" for="headerSearch">Search snacks</label>
-      <input id="headerSearch" type="search" autocomplete="off" placeholder="Search snacks...">
+      <input id="headerSearch" type="search" autocomplete="off" placeholder="Search snacks..." oninput="renderHeaderSearchSuggestions(this.value)" onkeydown="headerSearchKey(event)">
+      <div id="headerSearchSuggestions" class="shop-search-suggestions" role="listbox" hidden style="position:absolute;top:100%;left:0;right:0;z-index:50"></div>
       <button type="submit" aria-label="Search">⌕</button>
     </form>
     <button class="tbtn search-btn" onclick="focusShopSearch()" title="Search" aria-label="Search snacks"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><line x1="16.5" y1="16.5" x2="21" y2="21"/></svg></button>

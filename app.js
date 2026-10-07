@@ -571,10 +571,51 @@ function submitHomeSearch(){
 function submitHeaderSearch(event){
   event?.preventDefault();
   const input=document.getElementById('headerSearch'); const q=(input?.value||'').trim();
+  const box=document.getElementById('headerSearchSuggestions'); if(box){box.hidden=true;}
   shopState={q,cat:'',sort:'feat',brands:[],maxPrice:0,pack:'',badge:''};
   navigate('/shop/');
   setTimeout(()=>{const el=document.getElementById('fq');if(el){el.focus();el.setSelectionRange(el.value.length,el.value.length);}},80);
 }
+let headerSuggestIndex=-1;
+function renderHeaderSearchSuggestions(value){
+  const box=document.getElementById('headerSearchSuggestions'); if(!box)return;
+  const raw=String(value||'').trim(), q=raw.toLowerCase(); headerSuggestIndex=-1;
+  if(q.length<2){box.hidden=true;box.innerHTML='';return;}
+  const allMatches=activeProducts().filter(p=>{
+    const hay=[p.name,p.category,p.brand,getBrand(p.name)].filter(Boolean).join(' ').toLowerCase();
+    return hay.includes(q);
+  });
+  const matches=allMatches.slice(0,6);
+  box.hidden=false;
+  box.innerHTML=matches.length?matches.map((p,i)=>`<a role="option" data-hidx="${i}" href="/product/${p.id}/"><img src="${esc(assetUrl(p.img||''))}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.pack||p.category||'')}</small></span><strong>${fmt(p.price)}</strong></a>`).join(''):'<div class="search-empty">No matches — press Enter to search.</div>';
+}
+function headerSearchKey(event){
+  const box=document.getElementById('headerSearchSuggestions');
+  if(event.key==='ArrowDown'&&box&&!box.hidden){
+    event.preventDefault();
+    const items=[...box.querySelectorAll('[data-hidx]')];if(!items.length)return;
+    headerSuggestIndex=(headerSuggestIndex+1)%items.length;
+    items.forEach((el,i)=>el.classList.toggle('active',i===headerSuggestIndex));
+    items[headerSuggestIndex].scrollIntoView({block:'nearest'});
+  }
+  else if(event.key==='ArrowUp'&&box&&!box.hidden){
+    event.preventDefault();
+    const items=[...box.querySelectorAll('[data-hidx]')];if(!items.length)return;
+    headerSuggestIndex=(headerSuggestIndex-1+items.length)%items.length;
+    items.forEach((el,i)=>el.classList.toggle('active',i===headerSuggestIndex));
+    items[headerSuggestIndex].scrollIntoView({block:'nearest'});
+  }
+  else if(event.key==='Enter'&&box&&!box.hidden&&headerSuggestIndex>=0){
+    const a=box.querySelector(`[data-hidx="${headerSuggestIndex}"]`);
+    if(a){event.preventDefault();location.href=a.href;return;}
+  }
+  else if(event.key==='Escape'){if(box){box.hidden=true;}headerSuggestIndex=-1;}
+}
+// Hide header suggestions when clicking outside
+document.addEventListener('click',event=>{
+  const box=document.getElementById('headerSearchSuggestions');
+  if(box&&!box.hidden&&!event.target.closest('.header-search')){box.hidden=true;headerSuggestIndex=-1;}
+});
 function homeSearchKey(event){
   const box=document.getElementById('homeSearchSuggestions');
   if(event.key==='ArrowDown'&&!box?.hidden){event.preventDefault();setHomeSuggestion(homeSuggestIndex+1);}
