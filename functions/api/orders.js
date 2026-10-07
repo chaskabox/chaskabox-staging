@@ -33,6 +33,7 @@ import { buildTotals, initialPaymentStatus } from './_lib/pricing.js';
 import { validateOrderPayload } from './_lib/validate.js';
 import { takeToken, getClientIp } from './_lib/rate-limit.js';
 import { verifyTurnstile } from './_lib/turnstile.js';
+import { notifyOwner } from './_lib/notify.js';
 import { ok, Errors, logError } from './_lib/respond.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -260,6 +261,43 @@ export async function onRequest(context) {
           }
         }
         const status = result.replay ? 200 : 201;
+
+        // ---- owner notifications (best-effort, never blocks order) ----
+        // Only notify on NEW orders, not idempotency replays.
+        // Notification failure is logged but does NOT affect the order.
+        if (!result.replay) {
+          try {
+            // Build full order object for notification
+            const notifOrder = {
+              ...result.row,
+              items: lines.map((l, i) => ({
+                product_name: l.name,
+                product_pack: l.pack,
+                qty: value.items[i].qty,
+                unit_price: Number(l.price),
+              })),
+            };
+            const notif = await notifyOwner(env, notifOrder);
+            // Update order with notification status (best-effort)
+            try {
+              await updateRows(env, 'orders', { id: result.row.id }, {
+                email_sent: notif.email_sent,
+                email_error: notif.email_error,
+                email_sent_at: notif.email_sent ? new Date().toISOString() : null,
+                whatsapp_sent: notif.whatsapp_sent,
+                whatsapp_error: notif.whatsapp_error,
+                whatsapp_sent_at: notif.whatsapp_sent ? new Date().toISOString() : null,
+              });
+            } catch (dbErr) {
+              logError('orders:notify-db-update', dbErr);
+              // Non-fatal: order already created successfully
+            }
+          } catch (notifErr) {
+            logError('orders:notify', notifErr);
+            // Non-fatal: order already created successfully
+          }
+        }
+
         return ok(publicOrderShape(result.row, result.replay), status);
       } catch (err) {
         if (isUniqueViolation(err)) {
