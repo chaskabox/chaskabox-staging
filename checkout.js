@@ -185,13 +185,13 @@ function checkForm() {
   ];
   need.forEach(([f,e,fn]) => {
     const good = fn($('#'+f)?.value || '');
-    if ($('#'+e)) $('#'+e).style.display = good ? 'none' : '';
+    if ($('#'+e)) $('#'+e).style.display = good ? 'none' : 'block';
     if ($('#'+f)) { $('#'+f).setAttribute('aria-invalid', good ? 'false' : 'true'); $('#'+f).setAttribute('aria-describedby', e); }
     if(!good) ok=false;
   });
   if (isPrepaid()) {
     const refGood = ($('#f_reference')?.value || '').trim().length >= 4;
-    if ($('#e_reference')) $('#e_reference').style.display = refGood ? 'none' : '';
+    if ($('#e_reference')) $('#e_reference').style.display = refGood ? 'none' : 'block';
     if (!refGood) ok = false;
   } else if ($('#e_reference')) $('#e_reference').style.display = 'none';
   return ok;
