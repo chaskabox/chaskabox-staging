@@ -58,8 +58,7 @@
 <!-- mobile nav drawer -->
 <div id="mnav" class="mnav"><div class="mnav-head"><b>Shop ChaskaBox</b><button class="mclose" onclick="toggleMnav()">✕</button></div><div id="mnavList" class="mnav-list"></div></div>
 
-<div id="view-home"></div>
-<template id="tpl-home">
+<div id="view-home">
   <section class="hero">
     <div class="herowrap">
       <div class="herotxt">
@@ -152,7 +151,6 @@
   </section>
 </div>
 
-</template>
 <div id="view-shop" style="display:none">
   <div class="crumbs"><a href="/">Home</a> <span>›</span> <b id="crumbCat">All Snacks</b></div>
   <div class="catbanner"><h1 id="catTitle">All Snacks</h1><span class="catcount" id="catCount">249 products</span></div>
@@ -203,7 +201,7 @@
 </footer>
 
 <div class="overlay" id="overlay" onclick="closeDrawer()"></div>
-<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Shopping bag" aria-hidden="true" inert>
+<aside class="drawer" id="drawer" role="dialog" aria-modal="true" aria-label="Shopping bag" aria-hidden="true">
   <div class="dhead"><h3>Your snack bag</h3><button class="mclose" style="position:static" onclick="closeDrawer()">✕</button></div>
   <div class="ditems" id="ditems"></div>
   <div class="dfoot" id="dfoot"></div>
@@ -211,7 +209,7 @@
 
 <!-- mobile filter bottom sheet -->
 <div class="sheetbackdrop" id="filterBackdrop" onclick="closeFilters()"></div>
-<div class="filtersheet" id="filterSheet" role="dialog" aria-modal="true" aria-label="Filters" aria-hidden="true" inert>
+<div class="filtersheet" id="filterSheet" role="dialog" aria-modal="true" aria-label="Filters" aria-hidden="true">
   <div class="fsgrab"></div>
   <div class="fshead"><b>🔍 Filters</b><button class="fsclose" onclick="closeFilters()" aria-label="Close filters">✕</button></div>
   <div class="fsbody" id="filterSheetBody"></div>

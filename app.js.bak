@@ -213,14 +213,13 @@ function openFilters(){
   const sb=$('#filterSheetBody'); if(sb)sb.innerHTML=filterPanelHTML();
   $('#filterSheet').classList.add('open');
   $('#filterSheet').setAttribute('aria-hidden','false');
-  $('#filterSheet').removeAttribute('inert');
   $('#filterBackdrop').classList.add('open');
   document.body.style.overflow='hidden';
   updateApplyBtn();
   setTimeout(()=>document.querySelector('#filterSheet .fsclose')?.focus(),0);
 }
 function closeFilters(){
-  const s=$('#filterSheet'); if(s){s.classList.remove('open');s.setAttribute('aria-hidden','true');s.setAttribute('inert','');}
+  const s=$('#filterSheet'); if(s){s.classList.remove('open');s.setAttribute('aria-hidden','true');}
   const b=$('#filterBackdrop'); if(b)b.classList.remove('open');
   document.body.style.overflow='';
   if(filterReturnFocus&&typeof filterReturnFocus.focus==='function'){const f=filterReturnFocus;filterReturnFocus=null;setTimeout(()=>f.focus(),0);}
@@ -394,23 +393,7 @@ function showView(v){
   const views=['home','shop','product','account','cart','404'];
   views.forEach(name=>{
     const el=document.getElementById('view-'+name);
-    if(!el) return;
-    const active = (v===name);
-    // Only active route content is in DOM; inactive views are cleared
-    // (SEO: prevents multiple H1s; a11y: screen readers skip cleared content)
-    if(!active){
-      // Preserve shop/account/cart shells (JS re-renders them), clear home static content
-      if(name==='home') el.innerHTML='';
-      el.style.display='none';
-      el.setAttribute('hidden','');
-      el.setAttribute('aria-hidden','true');
-      el.setAttribute('inert','');
-    } else {
-      el.style.display='';
-      el.removeAttribute('hidden');
-      el.removeAttribute('aria-hidden');
-      el.removeAttribute('inert');
-    }
+    if(el) el.style.display=(v===name)?'':'none';
   });
   if(typeof closeFilters==='function') closeFilters();
   closeMnav();
@@ -435,12 +418,6 @@ function setPageMeta(title,path,noindex,description){
 }
 function renderHomeRoute(){
   setPageMeta('ChaskaBox — Pakistani Snacks Online','/',false,'Pakistani snacks and Chaska Boxes delivered across Pakistan with COD, JazzCash and Bank Transfer options.');
-  // Mount home content from template (SEO: only active route in DOM)
-  const vh=document.getElementById('view-home');
-  const tpl=document.getElementById('tpl-home');
-  if(vh && tpl && !vh.innerHTML.trim()){
-    vh.appendChild(tpl.content.cloneNode(true));
-  }
   showView('home');
   renderHomeContent();
 }
@@ -802,8 +779,8 @@ function cartCount(){return Object.values(CART).reduce((a,b)=>a+b,0);}
 function cartSubtotal(){return Object.entries(CART).reduce((s,[id,q])=>{const p=PRODUCTS.find(x=>x.id==id);return s+(p?p.price*q:0);},0);}
 function updateBadge(){const n=cartCount();$$('.cartcount').forEach(e=>{e.textContent=n;e.style.display=n?'flex':'none';});}
 let drawerReturnFocus=null;
-function openDrawer(){drawerReturnFocus=document.activeElement;renderDrawer();$('#overlay').classList.add('open');$('#drawer').classList.add('open');$('#drawer').setAttribute('aria-hidden','false');$('#drawer').removeAttribute('inert');document.body.style.overflow='hidden';setTimeout(()=>$('#drawer .mclose')?.focus(),0);}
-function closeDrawer(){$('#overlay').classList.remove('open');$('#drawer').classList.remove('open');$('#drawer').setAttribute('aria-hidden','true');$('#drawer').setAttribute('inert','');document.body.style.overflow='';if(drawerReturnFocus&&typeof drawerReturnFocus.focus==='function'){const f=drawerReturnFocus;drawerReturnFocus=null;setTimeout(()=>f.focus(),0);}}
+function openDrawer(){drawerReturnFocus=document.activeElement;renderDrawer();$('#overlay').classList.add('open');$('#drawer').classList.add('open');$('#drawer').setAttribute('aria-hidden','false');document.body.style.overflow='hidden';setTimeout(()=>$('#drawer .mclose')?.focus(),0);}
+function closeDrawer(){$('#overlay').classList.remove('open');$('#drawer').classList.remove('open');$('#drawer').setAttribute('aria-hidden','true');document.body.style.overflow='';if(drawerReturnFocus&&typeof drawerReturnFocus.focus==='function'){const f=drawerReturnFocus;drawerReturnFocus=null;setTimeout(()=>f.focus(),0);}}
 function renderDrawer(){
   const box=$('#ditems');
   const ids=Object.keys(CART);
