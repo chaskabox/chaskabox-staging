@@ -10,8 +10,8 @@ export function getClientIp(request) {
 
 function cfg(env = {}, options = {}) {
   return {
-    capacity: Math.max(1, parseInt(options.capacity ?? env.RATE_LIMIT_CAPACITY ?? '10', 10) || 10),
-    perMinute: Math.max(1, parseInt(options.perMinute ?? env.RATE_LIMIT_PER_MINUTE ?? '10', 10) || 10),
+    capacity: Math.max(1, parseInt(options.capacity ?? env.RATE_LIMIT_CAPACITY ?? '1000', 10) || 1000),
+    perMinute: Math.max(1, parseInt(options.perMinute ?? env.RATE_LIMIT_PER_MINUTE ?? '1000', 10) || 1000),
   };
 }
 
