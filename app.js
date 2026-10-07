@@ -1004,7 +1004,9 @@ function trapDialogTab(event){
 document.addEventListener('keydown',event=>{
   trapDialogTab(event);
   if(event.key!=='Escape') return;
-  if(document.getElementById('drawer')?.classList.contains('open')) closeDrawer();
+  // Cart drawer: check both class and aria-hidden for robustness
+  const drawer = document.getElementById('drawer');
+  if(drawer && (drawer.classList.contains('open') || drawer.getAttribute('aria-hidden')==='false')) { closeDrawer(); return; }
   else if(document.getElementById('filterSheet')?.classList.contains('open')) closeFilters();
   else if(document.getElementById('pmodal')?.classList.contains('open')) closeModal();
   else if(document.getElementById('aimodal')?.classList.contains('open')) toggleAI(false);
