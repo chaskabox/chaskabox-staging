@@ -1,0 +1,12 @@
+import { withAdmin, sb, json, readJson, httpError, audit, env } from '../_lib/auth.js';
+const ROLES=new Set(['owner','manager','fulfilment','content']);
+export const onRequestGet=withAdmin(['owner'],async(context)=>{const rows=await sb(context,'/rest/v1/admin_roles?select=user_id,role,active,granted_by,granted_at&order=granted_at.asc');return json({staff:rows||[]});});
+export const onRequestPost=withAdmin(['owner'],async(context,{user,role})=>{
+ const body=await readJson(context.request);const email=String(body.email||'').trim().toLowerCase();const newRole=String(body.role||'');if(!email.includes('@')||!ROLES.has(newRole))httpError('valid email and role required',400,'invalid_staff');
+ const e=env(context);const r=await fetch(`${String(e.SUPABASE_URL).replace(/\/+$/,'')}/auth/v1/invite`,{method:'POST',headers:{apikey:e.SUPABASE_SERVICE_ROLE_KEY,Authorization:`Bearer ${e.SUPABASE_SERVICE_ROLE_KEY}`,'Content-Type':'application/json'},body:JSON.stringify({email})});
+ let invited=null;try{invited=await r.json();}catch{} if(!r.ok||!invited?.id)httpError('Could not invite staff. Check Supabase Auth email configuration.',502,'invite_failed');
+ const rows=await sb(context,'/rest/v1/admin_roles',{method:'POST',body:{user_id:invited.id,role:newRole,active:true,granted_by:user.id}});
+ await audit(context,{actorId:user.id,actorRole:role,action:'role.assigned',entityType:'role',entityId:invited.id,before:null,after:{role:newRole,email}});
+ return json({staff:rows?.[0]||{user_id:invited.id,role:newRole,active:true},email},201);
+});
+export const onRequestPatch=withAdmin(['owner'],async(context,{user,role})=>{const body=await readJson(context.request);const id=String(body.user_id||'');const patch={};if(body.role!==undefined){if(!ROLES.has(String(body.role)))httpError('invalid role',400);patch.role=String(body.role);}if(body.active!==undefined)patch.active=!!body.active;if(!id||!Object.keys(patch).length)httpError('user_id and change required',400);if(id===user.id&&patch.active===false)httpError('Owner cannot deactivate the current session account',409,'self_lockout');const before=await sb(context,`/rest/v1/admin_roles?user_id=eq.${encodeURIComponent(id)}&select=*`);const rows=await sb(context,`/rest/v1/admin_roles?user_id=eq.${encodeURIComponent(id)}`,{method:'PATCH',body:patch});await audit(context,{actorId:user.id,actorRole:role,action:'role.updated',entityType:'role',entityId:id,before:before?.[0]||null,after:patch});return json({staff:rows?.[0]||null});});

@@ -6,7 +6,7 @@
 <meta name="robots" content="noindex,nofollow">
 <meta name="referrer" content="no-referrer">
 <title>ChaskaBox Admin Console</title>
-<link rel="stylesheet" href="/admin.css?v=1">
+<link rel="stylesheet" href="/admin.css?v=2">
 </head>
 <body>
 <div class="admin-shell">
@@ -30,7 +30,7 @@
       <button class="admin-nav-btn" data-view="security"><span>🔐</span> Security & Audit</button>
     </nav>
     <div class="admin-sidebar-foot">
-      <div class="backend-state warning" id="backendState"><span></span><b>Review mode</b><small>Secure backend not connected</small></div>
+      <div class="backend-state warning" id="backendState"><span></span><b>Authentication required</b><small>Sign in with an approved staff account</small></div>
       <a href="/" target="_blank" rel="noopener">↗ Open live storefront</a>
     </div>
   </aside>
@@ -50,7 +50,7 @@
 
     <main class="admin-content">
       <div class="security-notice" id="securityNotice">
-        <strong>Review build:</strong> this dashboard UI is intentionally not allowed to make production changes until Muse connects authenticated admin APIs, Supabase RLS and Cloudflare Access. You can inspect products, build drafts and preview changes safely.
+        <strong>Secure admin:</strong> sign in with an approved staff account. All writes are authorized server-side and recorded where audit logging applies.
       </div>
 
       <!-- DASHBOARD -->
@@ -58,8 +58,8 @@
         <div class="metric-grid">
           <article class="metric-card"><span class="metric-icon">◫</span><div><small>Products</small><strong id="metricProducts">—</strong><em id="metricProductsNote">catalogue items</em></div></article>
           <article class="metric-card"><span class="metric-icon">📦</span><div><small>Chaska Boxes</small><strong id="metricBundles">—</strong><em>bundle products</em></div></article>
-          <article class="metric-card"><span class="metric-icon">▤</span><div><small>Open Orders</small><strong id="metricOrders">—</strong><em>needs backend</em></div></article>
-          <article class="metric-card"><span class="metric-icon">₹</span><div><small>Revenue</small><strong id="metricRevenue">—</strong><em>needs central orders</em></div></article>
+          <article class="metric-card"><span class="metric-icon">▤</span><div><small>Open Orders</small><strong id="metricOrders">—</strong><em>live after sign-in</em></div></article>
+          <article class="metric-card"><span class="metric-icon">₹</span><div><small>Recognized sales</small><strong id="metricRevenue">—</strong><em>verified prepaid + delivered COD</em></div></article>
         </div>
 
         <div class="admin-grid two">
@@ -79,15 +79,15 @@
             <ul class="readiness-list">
               <li class="done"><span>✓</span><div><b>Frontend UX refresh</b><small>V3 polish implemented</small></div></li>
               <li class="done"><span>✓</span><div><b>Bank Transfer</b><small>Checkout UI integrated</small></div></li>
-              <li class="pending"><span>!</span><div><b>Central order database</b><small>Muse/Supabase connection required</small></div></li>
-              <li class="pending"><span>!</span><div><b>Secure admin authorization</b><small>Cloudflare Access + admin role required</small></div></li>
-              <li class="pending"><span>!</span><div><b>Server-authoritative pricing</b><small>Move totals to /api/orders</small></div></li>
+              <li class="done"><span>✓</span><div><b>Central order database</b><small>Supabase-backed order operations implemented</small></div></li>
+              <li class="done"><span>✓</span><div><b>Secure admin authorization</b><small>Supabase staff roles + server authorization implemented</small></div></li>
+              <li class="done"><span>✓</span><div><b>Server-authoritative pricing</b><small>Atomic order RPC validates catalogue totals</small></div></li>
             </ul>
           </section>
         </div>
 
         <section class="panel">
-          <div class="panel-head"><div><h2>Catalogue snapshot</h2><p>Current products loaded from products.json.</p></div><button class="text-btn" data-jump="products">Manage products →</button></div>
+          <div class="panel-head"><div><h2>Catalogue snapshot</h2><p>Live public catalogue with static fallback if the API is unavailable.</p></div><button class="text-btn" data-jump="products">Manage products →</button></div>
           <div class="category-bars" id="categoryBars"></div>
         </section>
       </section>
@@ -101,8 +101,8 @@
         </div>
         <div class="panel empty-backend">
           <div class="empty-icon">▤</div>
-          <h2>Central orders are not connected in this review copy</h2>
-          <p>When Muse connects the secure order API, this screen will show every guest and account order in one place with payment and fulfilment controls.</p>
+          <h2>Sign in to load live orders</h2>
+          <p>Approved staff can manage guest and account orders, payment verification, fulfilment, notification retries and audit history from this screen.</p>
           <div class="feature-chip-row"><span>Payment verification</span><span>Status timeline</span><span>Customer WhatsApp</span><span>Invoice/packing slip</span><span>Refund/cancel</span><span>CSV export</span></div>
         </div>
         <section class="panel">
@@ -139,7 +139,7 @@
             <div class="form-two"><label>Selling price (Rs.)<input id="boxPrice" type="number" min="0" placeholder="0"></label><label>Badge<select id="boxBadge"><option value="">None</option><option>New</option><option>Sale</option><option>Chaska Pick</option><option>Limited</option></select></label></div>
             <div class="builder-items" id="boxSelectedItems"><p class="muted">No products selected yet.</p></div>
             <div class="builder-totals"><span>Items retail value</span><b id="boxRetailValue">Rs. 0</b><span>Customer price</span><b id="boxCustomerPrice">Rs. 0</b><span>Saving</span><b id="boxSaving">Rs. 0</b></div>
-            <div class="action-row"><button class="btn secondary" id="previewBoxBtn">Preview box</button><button class="btn primary" id="saveBoxDraftBtn">Save draft</button></div>
+            <div class="action-row"><button class="btn secondary" id="previewBoxBtn">Preview box</button><button class="btn primary" id="saveBoxDraftBtn">Save Chaska Box</button></div>
             <p class="safe-note">Drafts remain in this review browser only. Publishing must go through the secure admin API.</p>
           </section>
         </div>
@@ -171,18 +171,18 @@
       </section>
 
       <!-- CUSTOMERS -->
-      <section class="admin-view" id="view-customers" data-title="Customers" data-subtitle="Customer history, addresses, order value and support context.">
-        <div class="panel empty-backend"><div class="empty-icon">♙</div><h2>Customer management needs the central order database</h2><p>The final console will show customer order history, lifetime spend, last order, support notes and verified contact details without exposing data to unauthorized staff.</p></div>
+      <section class="admin-view" id="view-customers" data-title="Customers" data-subtitle="Customer history, order value and support context for authorized staff.">
+        <div class="panel empty-backend"><div class="empty-icon">♙</div><h2>Sign in to load customers</h2><p>Authorized staff can review customer order context without exposing customer data to unauthorized roles.</p></div>
       </section>
 
       <!-- REVIEWS -->
-      <section class="admin-view" id="view-reviews" data-title="Reviews" data-subtitle="Moderate genuine shared reviews after Supabase review storage is enabled.">
-        <div class="panel empty-backend"><div class="empty-icon">★</div><h2>No fake review system</h2><p>Reviews will only appear here after Muse connects real shared reviews. Admin can approve, reject, reply and mark verified purchases. The storefront should never fabricate ratings.</p></div>
+      <section class="admin-view" id="view-reviews" data-title="Reviews" data-subtitle="Moderate genuine customer reviews from the shared database.">
+        <div class="panel empty-backend"><div class="empty-icon">★</div><h2>Sign in to moderate reviews</h2><p>Only genuine shared reviews are shown. Authorized staff can approve or reject submissions; the storefront never fabricates ratings.</p></div>
       </section>
 
       <!-- MEDIA -->
-      <section class="admin-view" id="view-media" data-title="Media Library" data-subtitle="Manage product images, logos and promotional assets safely.">
-        <div class="panel empty-backend"><div class="empty-icon">▣</div><h2>Media API not connected yet</h2><p>Final version should upload images to controlled storage, optimize WebP/AVIF sizes, preserve originals, and prevent arbitrary executable file uploads.</p></div>
+      <section class="admin-view" id="view-media" data-title="Media Library" data-subtitle="Manage product images and promotional assets safely.">
+        <div class="panel empty-backend"><div class="empty-icon">▣</div><h2>Sign in to load the media library</h2><p>Authorized content staff can upload validated image types to controlled storage and copy their public URLs into product records.</p></div>
       </section>
 
       <!-- PREVIEW -->
@@ -200,7 +200,7 @@
       <section class="admin-view" id="view-assistant" data-title="Admin Copilot" data-subtitle="AI-assisted catalogue and merchandising work — always reviewed by you before saving.">
         <div class="admin-grid two copilot-grid">
           <section class="panel">
-            <div class="panel-head"><div><h2>What should Copilot help with?</h2><p>No AI key should ever be exposed in this page. Muse must connect this through a protected server endpoint.</p></div></div>
+            <div class="panel-head"><div><h2>What should Copilot help with?</h2><p>Runs through the protected free Cloudflare Workers AI binding. AI output is always a draft/insight and never auto-published.</p></div></div>
             <div class="ai-shortcuts">
               <button data-ai="description">Write a better product description</button>
               <button data-ai="seo">Create SEO title + meta description</button>
@@ -208,13 +208,16 @@
               <button data-ai="category">Suggest category / badge / flavour tags</button>
               <button data-ai="homepage">Suggest homepage merchandising</button>
               <button data-ai="support">Draft a customer support reply</button>
+              <button data-ai="sales">Summarize last 7 days sales</button>
+              <button data-ai="attention">Summarize Needs Attention</button>
+              <button data-ai="catalogue">Summarize catalogue health</button>
             </div>
             <label>Instructions<textarea id="aiPrompt" rows="6" placeholder="Example: Write a concise nostalgic product description for Cocomo, mentioning pack size but no claims we cannot verify."></textarea></label>
-            <button class="btn primary" id="runAiBtn">✦ Generate draft</button>
+            <div class="action-row"><button class="btn primary" id="runAiBtn">✦ Generate draft / insight</button><button class="btn secondary" id="reindexAiSearch" type="button">Refresh AI product search</button></div>
           </section>
           <section class="panel ai-output-panel">
             <div class="panel-head"><div><h2>Draft output</h2><p>AI output is never auto-published.</p></div><button class="text-btn" id="copyAiOutput">Copy</button></div>
-            <div class="ai-output" id="aiOutput"><p class="muted">Connect `/api/admin/ai` through Muse to generate secure server-side drafts here.</p></div>
+            <div class="ai-output" id="aiOutput"><p class="muted">Choose a shortcut or write an instruction. Free AI is optional; store operations never depend on it.</p></div>
           </section>
         </div>
       </section>
@@ -243,17 +246,17 @@
           <section class="panel">
             <div class="panel-head"><div><h2>Required production protection</h2></div></div>
             <ul class="security-checks">
-              <li><span class="bad">Required</span> Cloudflare Access protects `/admin*`</li>
-              <li><span class="bad">Required</span> Supabase Auth verifies an approved admin role</li>
-              <li><span class="bad">Required</span> RLS blocks non-admin catalogue/order writes</li>
-              <li><span class="bad">Required</span> `/api/admin/*` re-verifies authorization server-side</li>
-              <li><span class="good">Planned</span> Archive/restore instead of accidental hard delete</li>
-              <li><span class="good">Planned</span> Every admin change written to audit log</li>
+              <li><span class="good">Implemented</span> Supabase Auth verifies an approved staff role</li>
+              <li><span class="good">Implemented</span> RLS blocks unauthorized catalogue/order access</li>
+              <li><span class="good">Implemented</span> `/api/admin/*` re-verifies authorization server-side</li>
+              <li><span class="good">Implemented</span> Archive/restore replaces routine hard deletion</li>
+              <li><span class="good">Implemented</span> Sensitive admin changes are audit logged</li>
+              <li><span class="bad">Staging verify</span> Cloudflare/admin route protection and headers</li>
             </ul>
           </section>
           <section class="panel">
             <div class="panel-head"><div><h2>Audit log</h2><p>Who changed what and when.</p></div></div>
-            <div class="empty-mini">Audit history will appear after backend integration.</div>
+            <div class="empty-mini">Sign in as Owner to load the live audit history.</div>
           </section>
         </div>
       </section>
@@ -276,8 +279,8 @@
         <label>Description<textarea id="editDescription" rows="5"></textarea></label>
         <label>Image path<input id="editImage" placeholder="/images/p123.webp"></label>
         <label class="checkline"><input type="checkbox" id="editBundle"> This product is a Chaska Box / bundle</label>
-        <div class="action-row sticky-actions"><button type="button" class="btn secondary" id="aiImproveProduct">✦ Improve with Copilot</button><button type="button" class="btn danger" id="archiveProduct">Archive</button><button class="btn primary" type="submit">Save draft</button></div>
-        <p class="safe-note">Draft saves are local to this review browser until the secure backend is connected.</p>
+        <div class="action-row sticky-actions"><button type="button" class="btn secondary" id="aiImproveProduct">✦ Improve with Copilot</button><button type="button" class="btn danger" id="archiveProduct">Archive</button><button class="btn primary" type="submit">Save product</button></div>
+        <p class="safe-note">Product changes are saved only through the authenticated server API and remain subject to staff permissions.</p>
       </form>
       <aside class="product-live-preview"><small>CUSTOMER PREVIEW</small><div id="productPreviewCard"></div></aside>
     </div>
@@ -285,6 +288,9 @@
 </div>
 
 <div class="admin-toast" id="adminToast" role="status" aria-live="polite"></div>
-<script src="/admin.js?v=1" defer></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
+<script src="/supabase-config.js?v=4"></script>
+<script src="/admin.js?v=3" defer></script>
+<script src="/admin-live.js?v=2" defer></script>
 </body>
 </html>

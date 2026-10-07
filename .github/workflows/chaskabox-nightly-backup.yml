@@ -1,0 +1,40 @@
+name: ChaskaBox nightly database backup
+
+on:
+  schedule:
+    - cron: '20 21 * * *' # 02:20 Asia/Karachi (UTC+5)
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backup:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Install PostgreSQL client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Create compressed database dump
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$DATABASE_URL"
+          mkdir -p backup
+          stamp="$(date -u +'%Y%m%dT%H%M%SZ')"
+          pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="backup/chaskabox-${stamp}.dump"
+          sha256sum "backup/chaskabox-${stamp}.dump" > "backup/chaskabox-${stamp}.dump.sha256"
+
+      - name: Upload encrypted-in-transit backup to Cloudflare R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          R2_ENDPOINT: ${{ secrets.R2_ENDPOINT }}
+          R2_BUCKET: ${{ secrets.R2_BUCKET }}
+        run: |
+          set -euo pipefail
+          test -n "$R2_ENDPOINT" && test -n "$R2_BUCKET"
+          aws s3 cp backup/ "s3://${R2_BUCKET}/chaskabox-db/" --recursive --endpoint-url "$R2_ENDPOINT" --only-show-errors

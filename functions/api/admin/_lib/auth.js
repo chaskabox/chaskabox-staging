@@ -12,9 +12,9 @@
  * - Error wire shape: {"error": {"code": "SCREAMING_SNAKE", "message": "..."}} (§4).
  *
  * Expected env vars (Cloudflare Pages > Settings > Environment variables / Secrets):
- *   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY,
- *   AI_PROVIDER_API_KEY (optional, only for /api/admin/ai),
- *   AI_PROVIDER_URL   (optional, OpenAI-compatible chat-completions endpoint)
+ *   SUPABASE_URL, SUPABASE_ANON_KEY, SUPABASE_SERVICE_ROLE_KEY.
+ * Free AI uses a Cloudflare Workers AI binding named `AI`; no AI provider key
+ * is placed in source or browser code. Optional model overrides are non-secret.
  */
 
 // ---------------------------------------------------------------------------
@@ -140,10 +140,10 @@ export function withAdmin(allowedRoles, handler) {
       const auth = await requireRole(context, allowedRoles);
       const method = (context.request.method || 'GET').toUpperCase();
       if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
-        const rl = rateLimit(`admin:${auth.user.id}`, 120, 60 * 1000);
+        const rl = await distributedRateLimit(context, `admin:${auth.user.id}`, 120, 120);
         if (!rl.allowed) {
           return json({ error: { code: 'RATE_LIMITED', message: 'Too many requests. Please slow down.' } }, 429, {
-            'Retry-After': String(Math.ceil(rl.resetMs / 1000)),
+            'Retry-After': String(rl.retryAfterSec || 1),
           });
         }
       }
@@ -212,7 +212,6 @@ export async function audit(context, { actorId, actorRole, action, entityType, e
         entity_id: entityId != null ? String(entityId) : 'n/a',
         before_data: before,
         after_data: after,
-        ip: getClientIp(context.request),
       },
     });
   } catch (e) {
@@ -251,23 +250,28 @@ export function sanitizeSearch(q, maxLen = 64) {
 }
 
 // ---------------------------------------------------------------------------
-// In-memory rate limiter (per isolate). Production should ALSO use
-// Cloudflare Rate Limiting rules / KV for cross-isolate enforcement.
+// Distributed mutation rate limiting. Uses migration 011 and stores only a
+// SHA-256 opaque key. Failure is closed for privileged writes.
 // ---------------------------------------------------------------------------
-const buckets = new Map();
-export function rateLimit(key, max, windowMs) {
-  const now = Date.now();
-  let b = buckets.get(key);
-  if (!b || now > b.reset) {
-    b = { count: 0, reset: now + windowMs };
-    buckets.set(key, b);
+async function sha256Hex(value) {
+  const data = new TextEncoder().encode(String(value));
+  const digest = await crypto.subtle.digest('SHA-256', data);
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+export async function distributedRateLimit(context, key, capacity = 120, perMinute = 120) {
+  try {
+    const opaque = await sha256Hex(`chaskabox-admin:${key}`);
+    const data = await sb(context, '/rest/v1/rpc/take_rate_limit_token', {
+      method: 'POST',
+      body: { p_key: opaque, p_capacity: capacity, p_per_minute: perMinute },
+    });
+    const row = Array.isArray(data) ? data[0] : data;
+    return { allowed: !!row?.allowed, retryAfterSec: Math.max(1, Number(row?.retry_after_sec) || 1) };
+  } catch (error) {
+    console.error('[admin-rate-limit] backend unavailable', error);
+    return { allowed: false, retryAfterSec: 60 };
   }
-  b.count += 1;
-  return {
-    allowed: b.count <= max,
-    remaining: Math.max(0, max - b.count),
-    resetMs: b.reset - now,
-  };
 }
 
 export function uuid() {

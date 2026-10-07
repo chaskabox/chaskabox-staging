@@ -9,15 +9,16 @@
  * - verified_purchase=false (a back-office job flips it when a delivered order exists)
  * - review_text is stored as-is; basic spam-shape checks applied
  */
-import { sb, json, httpError, readJson, rateLimit, getClientIp } from './admin/_lib/auth.js';
+import { sb, json, httpError, readJson } from './admin/_lib/auth.js';
+import { takeToken, getClientIp } from './_lib/rate-limit.js';
 
 export const onRequestPost = async (context) => {
   try {
     const ip = getClientIp(context.request);
-    const rl = rateLimit(`review:${ip}`, 5, 60 * 1000); // contract §3: 5/min/IP
+    const rl = await takeToken(`review:${ip}`, context.env, { capacity: 5, perMinute: 5 }); // contract §3: 5/min/IP
     if (!rl.allowed) {
       return json({ error: { code: 'RATE_LIMITED', message: 'Too many reviews. Please try again in a minute.' } }, 429, {
-        'Retry-After': String(Math.ceil(rl.resetMs / 1000)),
+        'Retry-After': String(rl.retryAfterSec || 60),
       });
     }
 

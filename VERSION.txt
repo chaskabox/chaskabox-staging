@@ -1,0 +1,7 @@
+ChaskaBox Muse Staging Candidate v4
+Build date: 2026-10-07
+Build label: muse-staging-v4-security-selfservice-ai
+Migrations: 001-018
+AI: optional Cloudflare Workers AI binding only; no paid AI provider required
+Commerce: atomic server-authoritative checkout; core store never depends on AI
+Status: STAGING CANDIDATE / PRODUCTION NO-GO UNTIL CRITICAL STAGING PASS + OWNER APPROVAL

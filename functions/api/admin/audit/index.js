@@ -1,0 +1,2 @@
+import { withAdmin, sb, json, pagination } from '../_lib/auth.js';
+export const onRequestGet=withAdmin(['owner'],async(context)=>{const url=new URL(context.request.url);const {page,per,rangeHeader}=pagination(url,50,100);const {data,total}=await sb(context,'/rest/v1/audit_log?select=id,actor_id,actor_role,action,entity_type,entity_id,created_at&order=created_at.desc',{headers:{Range:rangeHeader},count:true});return json({events:data||[],page,per_page:per,total});});

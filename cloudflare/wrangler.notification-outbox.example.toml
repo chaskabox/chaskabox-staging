@@ -1,0 +1,21 @@
+name = "chaskabox-notification-outbox"
+main = "workers/notification-outbox.js"
+compatibility_date = "2026-10-01"
+
+[triggers]
+crons = ["* * * * *"]
+
+# Configure these with `wrangler secret put` (never commit values):
+# SUPABASE_URL
+# SUPABASE_SERVICE_ROLE_KEY
+# RESEND_API_KEY
+# WAHA_API_URL
+# WAHA_API_KEY
+# OWNER_WHATSAPP
+# OUTBOX_RUN_SECRET
+#
+# Non-secret vars can be set in dashboard/wrangler as appropriate:
+# WAHA_SESSION=default
+# OWNER_ORDER_EMAIL=...
+# RESEND_FROM_EMAIL=ChaskaBox <orders@chaskabox.online>
+# ADMIN_BASE_URL=https://...

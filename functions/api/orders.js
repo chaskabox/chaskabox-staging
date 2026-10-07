@@ -28,12 +28,10 @@
  * Replay : 200 { ..., idempotent_replay: true }
  */
 
-import { selectOne, selectIn, insertRows, updateRows, rpc, isUniqueViolation } from './_lib/db.js';
-import { buildTotals, initialPaymentStatus } from './_lib/pricing.js';
+import { selectOne, selectIn, rpc, isUniqueViolation } from './_lib/db.js';
 import { validateOrderPayload } from './_lib/validate.js';
 import { takeToken, getClientIp } from './_lib/rate-limit.js';
 import { verifyTurnstile } from './_lib/turnstile.js';
-import { notifyOwner } from './_lib/notify.js';
 import { ok, Errors, logError } from './_lib/respond.js';
 
 const MAX_BODY_BYTES = 64 * 1024;
@@ -80,7 +78,7 @@ function publicOrderShape(row, replay = false) {
  * Preferred path: single atomic DB transaction via RPC.
  * The RPC re-validates everything against trusted catalogue state, so the
  * JS-side checks below are fail-fast only — the RPC is authoritative.
- * Returns { row, replay } or throws { code:'RPC_MISSING' } to trigger fallback.
+ * Returns { row, replay }. Missing RPC is a deployment/configuration error; checkout fails closed.
  */
 async function createViaRpc(env, value, orderNumber) {
   let res;
@@ -94,10 +92,11 @@ async function createViaRpc(env, value, orderNumber) {
         payment_method: value.payment_method,
         transaction_reference: value.transaction_reference,
         customer_note: value.customer_note,
+        user_id: value.user_id || null,
       },
     });
   } catch (err) {
-    // PGRST202 / 404 => function not installed yet -> REST fallback.
+    // PGRST202 / 404 => required atomic function is not installed.
     if (err.code === 'DB_ERROR' && (err.status === 404 || err.pgCode === 'PGRST202')) {
       const missing = new Error('RPC not installed');
       missing.code = 'RPC_MISSING';
@@ -110,57 +109,20 @@ async function createViaRpc(env, value, orderNumber) {
   return { row: payload.order, replay: !!payload.replay };
 }
 
-/**
- * Fallback path: sequential REST inserts. Used only when the
- * create_order_atomic migration has not been applied yet.
- * On item-insert failure the order is marked cancelled (contract §1.3,
- * reason in admin_notes) and a 500 is returned — the customer keeps
- * their cart and retries.
- */
-async function createViaRest(env, value, orderNumber, priced) {
-  const orderRows = await insertRows(env, 'orders', [{
-    order_number: orderNumber,
-    idempotency_key: value.idempotency_key,
-    user_id: null, // Phase 3 auth will attach the authenticated user id here.
-    customer_name: value.customer.name,
-    customer_phone: value.customer.phone,
-    customer_address: value.customer.address,
-    customer_city: value.customer.city,
-    payment_method: value.payment_method,
-    payment_status: initialPaymentStatus(value.payment_method),
-    fulfilment_status: 'new',
-    subtotal: priced.subtotal,
-    delivery_fee: priced.delivery_fee,
-    total: priced.total,
-    transaction_reference: value.transaction_reference,
-    customer_note: value.customer_note,
-  }]);
-  const order = orderRows[0];
 
-  // Column names per frozen contract §2.4: pack, quantity (NOT product_pack/qty).
-  const itemRows = priced.lines.map(l => ({
-    order_id: order.id,
-    product_id: l.product_id,
-    product_name: l.product_name,
-    pack: l.product_pack,
-    unit_price: l.unit_price,
-    quantity: l.qty,
-    line_total: l.line_total,
-  }));
+async function verifiedUserId(request, env) {
+  const h = request.headers.get('Authorization') || '';
+  const m = h.match(/^Bearer\s+(.+)$/i);
+  if (!m) return null;
+  if (!env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) return null;
   try {
-    await insertRows(env, 'order_items', itemRows);
-  } catch (err) {
-    // Compensate: never leave a half-created order looking placeable.
-    // 'cancelled' is the contract §1.3 terminal state; reason in admin_notes.
-    try {
-      await updateRows(env, 'orders', { id: order.id }, {
-        fulfilment_status: 'cancelled',
-        admin_notes: 'System: order_items insert failed after order creation; customer cart preserved, safe to retry with a new idempotency_key.',
-      });
-    } catch { /* best effort */ }
-    throw err;
-  }
-  return { row: order, replay: false };
+    const r = await fetch(`${String(env.SUPABASE_URL).replace(/\/+$/, '')}/auth/v1/user`, {
+      headers: { apikey: env.SUPABASE_ANON_KEY, Authorization: `Bearer ${m[1]}` },
+    });
+    if (!r.ok) return null;
+    const u = await r.json();
+    return u?.id || null;
+  } catch { return null; }
 }
 
 export async function onRequest(context) {
@@ -172,7 +134,7 @@ export async function onRequest(context) {
 
   // ---- rate limit (per IP, endpoint-namespaced) ----
   const ip = getClientIp(request);
-  const rl = takeToken(`orders:${ip}`, env);
+  const rl = await takeToken(`orders:${ip}`, env);
   if (!rl.allowed) {
     return Errors.rateLimited(rl.retryAfterSec);
   }
@@ -192,11 +154,18 @@ export async function onRequest(context) {
   const v = validateOrderPayload(parsed.body);
   if (!v.ok) return Errors.validation(v.errors);
   const value = v.value;
+  value.user_id = await verifiedUserId(request, env);
 
-  // ---- Turnstile (contract §4 request includes turnstile_token) ----
-  // Enforced only when TURNSTILE_SECRET_KEY is configured; skipped in
-  // offline/staging without the secret. Fail closed when configured.
-  if (env.TURNSTILE_SECRET_KEY) {
+  // ---- Turnstile ----
+  // Required by default for every deployed environment; local development is the
+  // only implicit bypass. Set REQUIRE_TURNSTILE=false explicitly only for an
+  // isolated non-public test environment. Missing production/staging secret fails closed.
+  const requireTurnstile = env.ENVIRONMENT !== 'local-dev' && String(env.REQUIRE_TURNSTILE || 'true').toLowerCase() !== 'false';
+  if (requireTurnstile || env.TURNSTILE_SECRET_KEY) {
+    if (!env.TURNSTILE_SECRET_KEY) {
+      logError('orders:turnstile-config', new Error('TURNSTILE_SECRET_KEY missing'));
+      return Errors.configError();
+    }
     let human = false;
     try {
       human = await verifyTurnstile(env, value.turnstile_token, ip);
@@ -205,10 +174,7 @@ export async function onRequest(context) {
       return Errors.configError();
     }
     if (!human) {
-      return Errors.validation([{
-        field: 'turnstile_token',
-        message: 'Bot check failed. Please refresh and try again.',
-      }]);
+      return Errors.validation([{ field: 'turnstile_token', message: 'Bot check failed. Please refresh and try again.' }]);
     }
   }
 
@@ -242,10 +208,9 @@ export async function onRequest(context) {
     }
     if (unavailable.length) return Errors.productUnavailable(unavailable);
 
-    // ---- server-authoritative totals (browser values never used) ----
-    const priced = buildTotals(value.payment_method, lines);
+    // The atomic RPC below computes authoritative fees/totals from live DB settings.
 
-    // ---- create (RPC preferred; REST fallback) ----
+    // ---- create atomically (required RPC; fail closed if missing) ----
     let attempt = 0;
     for (;;) {
       const orderNumber = makeOrderNumber();
@@ -255,49 +220,12 @@ export async function onRequest(context) {
           result = await createViaRpc(env, value, orderNumber);
         } catch (rpcErr) {
           if (rpcErr.code === 'RPC_MISSING') {
-            result = await createViaRest(env, value, orderNumber, priced);
-          } else {
-            throw rpcErr;
+            // Atomic checkout is a hard dependency. Never downgrade to partial writes.
+            return Errors.configError();
           }
+          throw rpcErr;
         }
         const status = result.replay ? 200 : 201;
-
-        // ---- owner notifications (best-effort, never blocks order) ----
-        // Only notify on NEW orders, not idempotency replays.
-        // Notification failure is logged but does NOT affect the order.
-        if (!result.replay) {
-          try {
-            // Build full order object for notification
-            const notifOrder = {
-              ...result.row,
-              items: lines.map((l, i) => ({
-                product_name: l.name,
-                product_pack: l.pack,
-                qty: value.items[i].qty,
-                unit_price: Number(l.price),
-              })),
-            };
-            const notif = await notifyOwner(env, notifOrder);
-            // Update order with notification status (best-effort)
-            try {
-              await updateRows(env, 'orders', { id: result.row.id }, {
-                email_sent: notif.email_sent,
-                email_error: notif.email_error,
-                email_sent_at: notif.email_sent ? new Date().toISOString() : null,
-                whatsapp_sent: notif.whatsapp_sent,
-                whatsapp_error: notif.whatsapp_error,
-                whatsapp_sent_at: notif.whatsapp_sent ? new Date().toISOString() : null,
-              });
-            } catch (dbErr) {
-              logError('orders:notify-db-update', dbErr);
-              // Non-fatal: order already created successfully
-            }
-          } catch (notifErr) {
-            logError('orders:notify', notifErr);
-            // Non-fatal: order already created successfully
-          }
-        }
-
         return ok(publicOrderShape(result.row, result.replay), status);
       } catch (err) {
         if (isUniqueViolation(err)) {

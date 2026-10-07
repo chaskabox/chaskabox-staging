@@ -17,7 +17,7 @@ export const onRequestGet = withAdmin(['owner', 'manager', 'fulfilment'], async 
 
   const history = await sb(
     context,
-    `/rest/v1/audit_log?entity_type=eq.order&entity_id=eq.${encodeURIComponent(String(order.id))}&select=actor_id,actor_role,action,before,after,created_at&order=created_at.asc&limit=200`
+    `/rest/v1/audit_log?entity_type=eq.order&entity_id=eq.${encodeURIComponent(String(order.id))}&select=actor_id,actor_role,action,before_data,after_data,created_at&order=created_at.asc&limit=200`
   );
 
   return json({ order, items: items || [], history: history || [] });

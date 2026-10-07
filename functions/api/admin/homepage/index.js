@@ -1,7 +1,7 @@
 /**
  * /api/admin/homepage
  * GET   — all homepage sections (draft + published). Min role: content (contract §3).
- * PATCH — save DRAFT changes only (draft_config); never publishes. Min role: content.
+ * PATCH — save section visibility/headings immediately and draft_config for explicit publish. Min role: content.
  *         Body: { sections: [{ section_key, draft_config?: {...}, enabled?: bool,
  *                             position?: int, heading?: string, subheading?: string }] }
  * Publish via POST /api/admin/homepage/publish (draft_config → config).
@@ -68,5 +68,5 @@ export const onRequestPatch = withAdmin(['owner', 'manager', 'content'], async (
     results.push(updated && updated[0]);
   }
 
-  return json({ sections: results, note: 'Drafts saved. Nothing is live until POST /api/admin/homepage/publish.' });
+  return json({ sections: results, note: 'Visibility/headings are saved immediately. draft_config becomes live only after POST /api/admin/homepage/publish.' });
 });

@@ -21,13 +21,18 @@ export const onRequestGet = withAdmin(['owner', 'manager'], async (context) => {
     `/rest/v1/orders?${cond}&select=id,order_number,customer_name,customer_city,payment_method,payment_status,fulfilment_status,total,created_at&order=created_at.desc&limit=200`
   )) || [];
 
-  const lifetime_spend = orders.reduce((s, o) => s + (Number(o.total) || 0), 0);
+  const lifetime_spend = orders.reduce((sum, o) => {
+    const recognized = o.fulfilment_status !== 'cancelled' && o.payment_status !== 'refunded' && ((o.payment_method === 'cod' && o.fulfilment_status === 'delivered') || (o.payment_method !== 'cod' && o.payment_status === 'payment_verified'));
+    return sum + (recognized ? (Number(o.total) || 0) : 0);
+  }, 0);
+  const gross_order_value = orders.reduce((sum,o)=>sum + (o.fulfilment_status !== 'cancelled' ? (Number(o.total)||0) : 0), 0);
 
   return json({
     customer: {
       ...customer,
       order_count: orders.length,
       lifetime_spend,
+      gross_order_value,
       first_order_at: orders.length ? orders[orders.length - 1].created_at : null,
       last_order_at: orders.length ? orders[0].created_at : null,
     },

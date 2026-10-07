@@ -8,17 +8,25 @@ function assetUrl(src){ if(!src) return ''; if(/^(https?:|data:|blob:|\/)/i.test
 
 /* ---------- data ---------- */
 async function loadProducts(){
-  const r=await fetch('/products.json'); PRODUCTS=await r.json();
+  let lastError=null;
+  for(const url of ['/api/products','/products.json']){
+    try{const r=await fetch(url,{cache:'no-cache'});if(!r.ok)throw new Error('HTTP '+r.status);const rows=await r.json();if(!Array.isArray(rows))throw new Error('Invalid catalogue');PRODUCTS=rows;return;}catch(e){lastError=e;}
+  }
+  throw lastError||new Error('Could not load product catalogue');
 }
-function activeProducts(){ return PRODUCTS.filter(p=>p.active!==false && p.img); }
+function activeProducts(){ return PRODUCTS.filter(p=>p.active!==false); }
 
 /* ---------- delivery date estimate (4-7 days) ---------- */
 function deliveryRange(){
   const f=d=>d.toLocaleDateString('en-GB',{day:'numeric',month:'long',year:'numeric'});
-  const a=new Date(); a.setDate(a.getDate()+4);
-  const b=new Date(); b.setDate(b.getDate()+7);
+  const raw=String(STORE_CONFIG?.settings?.delivery_estimate||'4-7 days');const nums=raw.match(/\d+/g)||[];
+  const min=Math.max(0,Number(nums[0]||4)),max=Math.max(min,Number(nums[1]||nums[0]||7));
+  const a=new Date(); a.setDate(a.getDate()+min);
+  const b=new Date(); b.setDate(b.getDate()+max);
   return `From ${f(a)} to ${f(b)}`;
 }
+
+function productHref(id){return '/product/?id='+encodeURIComponent(id);}
 
 /* ---------- cards ---------- */
 function bundleFanHTML(p){
@@ -37,7 +45,7 @@ function cardHTML(p){
   const old=p.oldPrice&&p.oldPrice>p.price?`<span class="oldprice">${fmt(p.oldPrice)}</span>`:'';
   const save=p.oldPrice&&p.oldPrice>p.price?`<span class="savepill">Save ${Math.round((1-p.price/p.oldPrice)*100)}%</span>`:'';
   const catlabel=p.category?`<div class="pcat">${esc(p.category)}${p.bundle?' · BOX':''}</div>`:'';
-  const href=`/product/${p.id}/`;
+  const href=productHref(p.id);
   const fan=bundleFanHTML(p);
   return `<article class="card${p.bundle?' bundle-card':''}">${badge}${typeof wishBtnHTML==='function'?wishBtnHTML(p):''}
     <a class="pimg" href="${href}">${fan}${img}</a>
@@ -117,29 +125,31 @@ function renderHomeContent(){
   shelfSeq=0;
   let html='';
   const sale=act.filter(p=>p.oldPrice&&p.oldPrice>p.price).slice(0,10);
-  const picks=act.filter(p=>p.category!=='Bundles').slice(0,10);
-  const bundles=(cats['Bundles']||[]).slice(0,10);
-  const chatpata=(cats['Snacks & Nimco']||[]).slice(0,10);
-  if(sale.length) html+=shelf('🔥 Deals Worth Grabbing',sale,'#b42318','', 'Sale');
-  if(picks.length) html+=shelf('⭐ Chaska Picks',picks,'#1a2b5c','');
-  if(bundles.length) html+=shelf('📦 Chaska Boxes',bundles,'#d49a17','Bundles');
-  if(chatpata.length) html+=shelf('🌶️ Chatpata Picks',chatpata,'#3d8b5f','Snacks & Nimco');
+  const picks=curatedProducts('chaska_picks',act.filter(p=>p.category!=='Bundles').slice(0,10));
+  const bundles=curatedProducts('boxes',(cats['Bundles']||[]).slice(0,10));
+  const chatpata=curatedProducts('chatpata_picks',(cats['Snacks & Nimco']||[]).slice(0,10));
+  const newest=curatedProducts('new_items',[...act].sort((a,b)=>Number(b.id)-Number(a.id)).slice(0,10));
+  if(sale.length) html+=shelf('🔥 Deals Worth Grabbing',sale,'#b42318','', 'Sale','deals');
+  if(picks.length) html+=shelf('⭐ Chaska Picks',picks,'#1a2b5c','','','chaska_picks');
+  if(bundles.length) html+=shelf('📦 Chaska Boxes',bundles,'#d49a17','Bundles','','boxes');
+  if(chatpata.length) html+=shelf('🌶️ Chatpata Picks',chatpata,'#3d8b5f','Snacks & Nimco','','chatpata_picks');
+  if(newest.length) html+=shelf('✨ New & Recently Added',newest,'#6b4f9d','','','new_items');
   $('#shelves').innerHTML=html;
   const wp=$('#weeklyPick');
   if(wp){
     const pick=sale[0]||picks[0]||act[0];
     if(pick){
-      wp.innerHTML=`<a class="pickcard" href="/product/${pick.id}/"><div class="pickimg"><img src="${esc(assetUrl(pick.img||''))}" alt="${esc(pick.name)}" loading="lazy"></div><div class="pickinfo"><div class="picktag">${esc((pick.category||'ChaskaBox').toUpperCase())}</div><b>${esc(pick.name)}</b><div class="pickprice">${fmt(pick.price)}</div><span class="alink">View snack →</span></div></a>`;
+      wp.innerHTML=`<a class="pickcard" href="${productHref(pick.id)}"><div class="pickimg"><img src="${esc(assetUrl(pick.img||''))}" alt="${esc(pick.name)}" loading="lazy"></div><div class="pickinfo"><div class="picktag">${esc((pick.category||'ChaskaBox').toUpperCase())}</div><b>${esc(pick.name)}</b><div class="pickprice">${fmt(pick.price)}</div><span class="alink">View snack →</span></div></a>`;
     } else wp.innerHTML='';
   }
   observeReveals();
 }
 let shelfSeq=0;
-function shelf(title,items,color,cat,badge){
+function shelf(title,items,color,cat,badge,homeKey){
   const href=badge?'/shop/':(cat?categoryPath(cat):'/shop/');
   const action=badge?`onclick="goBadge('${esc(badge)}');return false"`:'';
   const sid='hs'+(++shelfSeq);
-  return `<section class="shelf reveal">
+  return `<section class="shelf reveal"${homeKey?` data-home-section="${esc(homeKey)}"`:``}>
     <div class="shelfband" style="background:${color}">
       <div class="shelfw"><h2>${esc(title)}</h2>
       <div class="shelfnav"><a class="viewall" href="${href}" ${action}>View all →</a>
@@ -297,7 +307,7 @@ function renderShopSearchSuggestions(value){
   const matches=activeProducts().filter(p=>(p.name+' '+(p.category||'')+' '+getBrand(p.name)).toLowerCase().includes(q)).slice(0,5);
   if(!matches.length){box.hidden=true;box.innerHTML='';return;}
   box.hidden=false;
-  box.innerHTML=matches.map((p,i)=>`<a role="option" data-sidx="${i}" href="/product/${p.id}/"><img src="${esc(assetUrl(p.img||''))}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.pack||p.category||'')}</small></span><strong>${fmt(p.price)}</strong></a>`).join('');
+  box.innerHTML=matches.map((p,i)=>`<a role="option" data-sidx="${i}" href="${productHref(p.id)}"><img src="${esc(assetUrl(p.img||''))}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.pack||p.category||'')}</small></span><strong>${fmt(p.price)}</strong></a>`).join('');
 }
 function setShopSuggestion(index){
   const box=document.getElementById('shopSearchSuggestions'); if(!box||box.hidden)return;
@@ -313,11 +323,28 @@ function shopSearchKey(event){
   else if(event.key==='Enter'&&shopSuggestIndex>=0&&!box?.hidden){event.preventDefault();const a=box.querySelector(`[data-sidx="${shopSuggestIndex}"]`);if(a)location.href=a.href;}
   else if(event.key==='Escape'&&box){box.hidden=true;shopSuggestIndex=-1;}
 }
+let smartSearchSeq=0, smartSearchTimer;
+function serverProductToLocal(p){return {id:Number(p.id),name:p.name||'',category:p.category||'',brand:p.brand||'',pack:p.pack||'',price:Number(p.price||0),oldPrice:p.old_price==null?null:Number(p.old_price),desc:p.description||'',badge:p.badge||'',img:p.image_url||''};}
+async function renderSmartSearchResults(query,seq){
+  try{
+    const r=await fetch('/api/ai/search',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({query})});
+    if(!r.ok)throw new Error('smart search unavailable'); const data=await r.json();
+    if(seq!==smartSearchSeq||shopState.q!==query)return;
+    const rows=(data.products||[]).map(serverProductToLocal);
+    const grid=$('#shopGrid'),cnt=document.getElementById('shopResultCount');
+    if(rows.length){grid.innerHTML=rows.map(cardHTML).join('');if(cnt)cnt.textContent=rows.length+' smart matches';$('#catCount').textContent=rows.length+' smart matches';}
+    else grid.innerHTML='<div class="empty">No products found. Try another search.</div>';
+    observeReveals();
+  }catch{if(seq===smartSearchSeq&&shopState.q===query)$('#shopGrid').innerHTML='<div class="empty">No products found. Try another search.</div>';}
+}
 function renderShopResults(){
   const list=filteredShop();
   $('#catCount').textContent=list.length+' products';
   const cnt=document.getElementById('shopResultCount');if(cnt)cnt.textContent=list.length+' products';
-  $('#shopGrid').innerHTML=list.length?list.map(cardHTML).join(''):'<div class="empty">No products found. Try another search.</div>';
+  const canSmart=!list.length&&String(shopState.q||'').trim().length>=2&&!shopState.cat&&!shopState.brands.length&&!shopState.maxPrice&&!shopState.pack&&!shopState.badge;
+  if(list.length){clearTimeout(smartSearchTimer);smartSearchSeq++;$('#shopGrid').innerHTML=list.map(cardHTML).join('');}
+  else if(canSmart){const seq=++smartSearchSeq;clearTimeout(smartSearchTimer);$('#shopGrid').innerHTML='<div class="empty">✦ Looking for smart matches…</div>';smartSearchTimer=setTimeout(()=>renderSmartSearchResults(shopState.q,seq),420);}
+  else {clearTimeout(smartSearchTimer);smartSearchSeq++;$('#shopGrid').innerHTML='<div class="empty">No products found. Try another search.</div>';}
   renderFilterChips();updateApplyBtn();
   const ms=$('#mSort'); if(ms)ms.value=shopState.sort;
   if(typeof revealObs!=='undefined'&&revealObs){
@@ -378,7 +405,7 @@ function renderProductDetail(id){
           <button class="pdwish${typeof isWished==='function'&&isWished(p.id)?' on':''}" aria-label="Add ${esc(p.name)} to wishlist" onclick="toggleWishlist(${p.id},this)">♥</button>
         </div>
         <div class="dbox"><b>Estimated delivery</b><small>Pakistan-wide delivery window<br><span class="ddates">${deliveryRange()}</span></small></div>
-        <div class="pd-meta"><span>🚚 COD: Rs. 300 delivery</span><span>⚡ Prepaid Rs. 5,000+: FREE delivery</span><span>✅ Original sealed packs</span></div>
+        <div class="pd-meta"><span>🚚 COD: ${fmt(settingNum('cod_delivery_fee_pkr',300))} delivery</span><span>⚡ Prepaid ${fmt(settingNum('prepaid_free_delivery_threshold_pkr',5000))}+: FREE delivery</span><span>✅ Original sealed packs</span></div>
         <div class="product-help"><b>Need ingredients or allergen details?</b><span>Message ChaskaBox on WhatsApp before ordering. If an item becomes unavailable, we will contact you before any substitution.</span></div>
       </div>
     </div>
@@ -389,6 +416,40 @@ function renderProductDetail(id){
 function pdBack(){ history.back(); }
 function pdQty(d){const e=$('#pdqty');e.textContent=Math.max(1,+e.textContent+d);}
 
+
+/* ---------- public CMS/settings (admin-controlled, public-safe) ---------- */
+let STORE_CONFIG={settings:{},sections:[]};
+async function loadStorefrontConfig(){
+  try{const r=await fetch('/api/storefront-config',{cache:'no-cache'});if(r.ok)STORE_CONFIG=await r.json();}catch(e){}
+  return STORE_CONFIG;
+}
+function settingNum(key,fallback){const v=STORE_CONFIG?.settings?.[key];const n=Number(v);return Number.isFinite(n)?n:fallback;}
+function sectionConfig(key){return (STORE_CONFIG?.sections||[]).find(r=>r.section_key===key)?.config||{};}
+function curatedProducts(key,fallback){
+  const ids=sectionConfig(key)?.product_ids;
+  if(!Array.isArray(ids)||!ids.length) return fallback;
+  const by=new Map(activeProducts().map(p=>[Number(p.id),p]));
+  const chosen=ids.map(Number).map(id=>by.get(id)).filter(Boolean);
+  return chosen.length?chosen:fallback;
+}
+function applyHomeCms(){
+  const rows=STORE_CONFIG?.sections||[]; const by=Object.fromEntries(rows.map(r=>[r.section_key,r]));
+  const selectors={
+    announcement_bar:['.promo'], hero:['#view-home .hero'], categories:['#view-home .discover'],
+    chaska_picks:['#view-home [data-home-section="chaska_picks"]'], boxes:['#view-home .box-spotlight','#view-home [data-home-section="boxes"]'],
+    chatpata_picks:['#view-home [data-home-section="chatpata_picks"]'], new_items:['#view-home [data-home-section="new_items"]'],
+    how_it_works:['#view-home .fresh'], faq:['#view-home .faq-section']
+  };
+  for(const [key,sels] of Object.entries(selectors)){
+    const row=by[key]; if(!row) continue;
+    for(const sel of sels){
+      const el=document.querySelector(sel); if(!el) continue;
+      el.hidden=row.enabled===false;
+      if(row.heading){const h=el.querySelector('h1,h2');if(h)h.textContent=row.heading;}
+      if(row.subheading){const text=el.querySelector('p,.freshdesc');if(text)text.textContent=row.subheading;}
+    }
+  }
+}
 /* ---------- views ---------- */
 function showView(v){
   const views=['home','shop','product','account','cart','404'];
@@ -443,6 +504,7 @@ function renderHomeRoute(){
   }
   showView('home');
   renderHomeContent();
+  loadStorefrontConfig().then(applyHomeCms);
 }
 function renderShopRoute(){
   setPageMeta('Shop Pakistani Snacks | ChaskaBox','/shop/',false,'Browse Pakistani snacks by category, brand and price at ChaskaBox.');
@@ -481,11 +543,12 @@ function renderCartPage(){
   const rows=items.map(([id,qty])=>{
     const p=PRODUCTS.find(x=>x.id==id); if(!p)return '';
     subtotal+=p.price*qty;
-    return `<div class="cart-page-item"><a href="/product/${p.id}/"><img src="${esc(assetUrl(p.img||''))}" alt="${esc(p.name)}"></a><div class="cart-page-copy"><a href="/product/${p.id}/"><b>${esc(p.name)}</b></a><small>${esc(p.pack||'')}</small><span>${fmt(p.price)}</span></div><div class="qty"><button onclick="setCartPageQty(${p.id},${qty-1})" aria-label="Decrease">−</button><b>${qty}</b><button onclick="setCartPageQty(${p.id},${qty+1})" aria-label="Increase">+</button></div><b>${fmt(p.price*qty)}</b><button class="cart-remove" onclick="setCartPageQty(${p.id},0)" aria-label="Remove ${esc(p.name)}">Remove</button></div>`;
+    return `<div class="cart-page-item"><a href="${productHref(p.id)}"><img src="${esc(assetUrl(p.img||''))}" alt="${esc(p.name)}"></a><div class="cart-page-copy"><a href="${productHref(p.id)}"><b>${esc(p.name)}</b></a><small>${esc(p.pack||'')}</small><span>${fmt(p.price)}</span></div><div class="qty"><button onclick="setCartPageQty(${p.id},${qty-1})" aria-label="Decrease">−</button><b>${qty}</b><button onclick="setCartPageQty(${p.id},${qty+1})" aria-label="Increase">+</button></div><b>${fmt(p.price*qty)}</b><button class="cart-remove" onclick="setCartPageQty(${p.id},0)" aria-label="Remove ${esc(p.name)}">Remove</button></div>`;
   }).join('');
-  const threshold=5000, remaining=Math.max(0,threshold-subtotal), pct=Math.min(100,Math.round(subtotal/threshold*100));
+  const threshold=Math.max(0,settingNum('prepaid_free_delivery_threshold_pkr',5000));
+  const remaining=Math.max(0,threshold-subtotal), pct=threshold<=0?100:Math.min(100,Math.round(subtotal/threshold*100));
   const progress=remaining?`<p><b>${fmt(remaining)}</b> more to unlock FREE delivery with prepaid payment.</p>`:'<p><b>🎉 Free delivery unlocked</b> for prepaid payment.</p>';
-  el.innerHTML=`<div class="section cart-page"><div class="crumbs"><a href="/">Home</a> <span>›</span> Bag</div><div class="section-head"><div><span class="eyebrow">YOUR CHASKA</span><h1>Your Snack Bag</h1></div><a href="/shop/">Continue shopping →</a></div><div class="cart-page-layout"><div class="cart-page-items">${rows}</div><aside class="cart-summary"><h3>Order summary</h3><div class="drow"><span>Subtotal</span><b>${fmt(subtotal)}</b></div><div class="shipping-progress"><div class="progress-track"><span class="${pct>=100?'is-full':''}" data-progress="${pct}"></span></div>${progress}</div><p class="cart-note">COD: Rs. 300 delivery · Prepaid Rs. 5,000+: free delivery</p><a class="checkoutbtn cart-checkout" href="/checkout.html">Proceed to Checkout →</a></aside></div></div>`;
+  el.innerHTML=`<div class="section cart-page"><div class="crumbs"><a href="/">Home</a> <span>›</span> Bag</div><div class="section-head"><div><span class="eyebrow">YOUR CHASKA</span><h1>Your Snack Bag</h1></div><a href="/shop/">Continue shopping →</a></div><div class="cart-page-layout"><div class="cart-page-items">${rows}</div><aside class="cart-summary"><h3>Order summary</h3><div class="drow"><span>Subtotal</span><b>${fmt(subtotal)}</b></div><div class="shipping-progress"><div class="progress-track"><span class="${pct>=100?'is-full':''}" data-progress="${pct}"></span></div>${progress}</div><p class="cart-note">COD: ${fmt(settingNum('cod_delivery_fee_pkr',300))} delivery · Prepaid ${fmt(threshold)}+: free delivery</p><a class="checkoutbtn cart-checkout" href="/checkout.html">Proceed to Checkout →</a></aside></div></div>`;
   animateProgressIn(el,'cart',pct);
 }
 function setCartPageQty(id,qty){ if(qty<=0)delete CART[id]; else CART[id]=qty; saveCart(); renderCartPage(); }
@@ -574,7 +637,7 @@ function renderHomeSearchSuggestions(value){
   const matches=allMatches.slice(0,6);
   box.hidden=false;
   box.setAttribute('role','listbox');
-  box.innerHTML=matches.length?matches.map((p,i)=>`<a role="option" data-hidx="${i}" href="/product/${p.id}/"><img src="${esc(assetUrl(p.img||''))}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.pack||p.category||'')}</small></span><strong>${fmt(p.price)}</strong></a>`).join('')+`<button class="search-all" type="button" onclick="searchAllFromHome()">See all ${allMatches.length} result${allMatches.length===1?'':'s'} →</button>`:'<div class="search-empty">No exact match — press Search to browse all results.</div>';
+  box.innerHTML=matches.length?matches.map((p,i)=>`<a role="option" data-hidx="${i}" href="${productHref(p.id)}"><img src="${esc(assetUrl(p.img||''))}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.pack||p.category||'')}</small></span><strong>${fmt(p.price)}</strong></a>`).join('')+`<button class="search-all" type="button" onclick="searchAllFromHome()">See all ${allMatches.length} result${allMatches.length===1?'':'s'} →</button>`:'<div class="search-empty">No exact match — press Search to browse all results.</div>';
 }
 function setHomeSuggestion(index){
   const box=document.getElementById('homeSearchSuggestions');if(!box||box.hidden)return;
@@ -610,7 +673,7 @@ function renderHeaderSearchSuggestions(value){
   });
   const matches=allMatches.slice(0,6);
   box.hidden=false;
-  box.innerHTML=matches.length?matches.map((p,i)=>`<a role="option" data-hidx="${i}" href="/product/${p.id}/"><img src="${esc(assetUrl(p.img||''))}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.pack||p.category||'')}</small></span><strong>${fmt(p.price)}</strong></a>`).join(''):'<div class="search-empty">No matches — press Enter to search.</div>';
+  box.innerHTML=matches.length?matches.map((p,i)=>`<a role="option" data-hidx="${i}" href="${productHref(p.id)}"><img src="${esc(assetUrl(p.img||''))}" alt=""><span><b>${esc(p.name)}</b><small>${esc(p.pack||p.category||'')}</small></span><strong>${fmt(p.price)}</strong></a>`).join(''):'<div class="search-empty">No matches — press Enter to search.</div>';
 }
 function headerSearchKey(event){
   const box=document.getElementById('headerSearchSuggestions');
@@ -662,7 +725,7 @@ function migrateHashURL(){
     } else if(hashPath.startsWith('/product/')){
       // Let product hash URLs redirect to clean product URLs if possible
       const m = hashPath.match(/\/product\/(\d+)/);
-      if(m) newPath = '/product/' + m[1] + '/';
+      if(m) newPath = productHref(m[1]);
     }
     history.replaceState(null, '', normalizePath(newPath)+location.search);
     // replaceState already clears the legacy hash without adding history
@@ -834,11 +897,14 @@ function animateProgressIn(scope,key,pct){
 }
 
 /* ---------- Chaska Help (FAQ + product finder) ---------- */
+function fallbackDeliveryEstimate(){return String(STORE_CONFIG?.settings?.delivery_estimate||'4-7 days').replace(/^"|"$/g,'');}
+function fallbackDeliveryCopy(){const cod=settingNum('cod_delivery_fee_pkr',300),pre=settingNum('prepaid_delivery_fee_pkr',300),thr=settingNum('prepaid_free_delivery_threshold_pkr',5000);return `COD par ${fmt(cod)} delivery fee hai. JazzCash ya Bank Transfer prepaid order ${fmt(thr)}+ ho to delivery FREE hai — is se kam par ${fmt(pre)}.`;}
+function fallbackJazzCopy(){const thr=settingNum('prepaid_free_delivery_threshold_pkr',5000);return `Checkout par JazzCash select karein, screen par dikhaye gaye official payment details par exact total bhejein, phir transaction/reference number enter karein. ${fmt(thr)}+ prepaid order par delivery FREE hai. ✅`;}
 const AI_QA=[
- {q:'Delivery kitne din mein hogi?',k:['deliver','din','kitne','time','pohnch','kab'],a:'All over Pakistan 4–7 din mein delivery hoti hai. 🚚 Order ke waqt aapko estimated dates bhi dikhai deti hain.'},
- {q:'Delivery charges kya hain?',k:['charge','fee','delivery charges','kitna'],a:'COD par Rs. 300 delivery fee hai. JazzCash ya Bank Transfer prepaid order Rs. 5,000+ ho to delivery FREE hai — is se kam par Rs. 300.'},
- {q:'Payment kaise karun?',k:['payment','pay','pese','paise','jazzcash','easypaisa','cod'],a:'Teen options hain: 1) Cash on Delivery, 2) JazzCash advance, 3) Punjab Bank transfer. Prepaid payment checkout total ke mutabiq karein aur transaction/reference number submit karein.'},
- {q:'JazzCash par paise kaise bhejun?',k:['jazzcash','till','qr','advance','bhejun','send'],a:'Checkout par JazzCash select karein, exact total QR/Till ID 981716438 par bhejein, phir transaction/reference number enter karein. Rs. 5,000+ prepaid order par delivery FREE hai. ✅'},
+ {q:'Delivery kitne din mein hogi?',k:['deliver','din','kitne','time','pohnch','kab'],a:()=>`Pakistan-wide estimated delivery ${fallbackDeliveryEstimate()} hai. 🚚 Order ke waqt available estimate bhi dikhaya jata hai.`},
+ {q:'Delivery charges kya hain?',k:['charge','fee','delivery charges','kitna'],a:()=>fallbackDeliveryCopy()},
+ {q:'Payment kaise karun?',k:['payment','pay','pese','paise','jazzcash','easypaisa','cod'],a:'Available options checkout par live settings ke mutabiq dikhte hain: Cash on Delivery aur enabled prepaid methods. Prepaid payment checkout total ke mutabiq karein aur transaction/reference number submit karein.'},
+ {q:'JazzCash par paise kaise bhejun?',k:['jazzcash','till','qr','advance','bhejun','send'],a:()=>fallbackJazzCopy()},
  {q:'Order kaise track karun?',k:['track','status','order number','kahan'],a:'Order ke baad aapko order number milta hai (jaise CB-041026-00001). WhatsApp 0332-0005381 par order number bhej kar status pooch sakte hain.'},
  {q:'Order number kya hai?',k:['order number','number'],a:'Har order par ek unique number milta hai, jaise CB-041026-00001. Ye confirmation screen par aur email mein hota hai — isi se aapka order track hota hai.'},
  {q:'Kya products original hain?',k:['original','asli','fake','naqli','brand'],a:'Hum original sealed branded packs source karne ki koshish karte hain — Hilal, Kolson, Mayfair, Candyland waghera. Kisi specific pack ya authenticity concern par WhatsApp se verify kar sakte hain. ✅'},
@@ -873,7 +939,7 @@ function aiReply(text){
     x.k.forEach(k=>{ if(t.includes(k)) s+=k.length; });
     if(s>bestScore){bestScore=s;best=x;}
   });
-  return best?{text:best.a}:{text:'Hmm, ye sawal samajh nahi aaya. 🤔 Product ka naam likhein (jaise "chocolate") ya WhatsApp 0332-0005381 par poochein!'};
+  return best?{text:(typeof best.a==='function'?best.a():best.a)}:{text:'Hmm, ye sawal samajh nahi aaya. 🤔 Product ka naam likhein (jaise "chocolate") ya WhatsApp 0332-0005381 par poochein!'};
 }
 function searchProductsAI(q){
   // Skip if it's clearly a FAQ question
@@ -923,22 +989,29 @@ function aiSay(user,bot){
 }
 function askAI(i){
   const x=AI_QA[i];
-  aiSay(x.q,esc(x.a));
+  aiSay(x.q,esc(typeof x.a==='function'?x.a():x.a));
 }
-function askAIFree(){
+async function askAIFree(){
   const inp=$('#aiq'),v=(inp.value||'').trim();
   if(!v) return;
-  inp.value='';
-  const r=aiReply(v);
-  if(r.products&&r.products.length){
-    aiSay(v,'Ye rahe matching products! 👇<br>'+aiProductCards(r.products));
-  }else{
-    aiSay(v,esc(r.text||r));
-  }
+  inp.value=''; inp.disabled=true;
+  const body=$('#aibody'), id='aiwait-'+Date.now();
+  body.innerHTML+=`<div class="amsg user">${esc(v)}</div><div class="amsg bot" id="${id}">✦ Soch raha hun…</div>`; body.scrollTop=body.scrollHeight;
+  const out=document.getElementById(id);
+  try{
+    const res=await fetch('/api/ai/assistant',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question:v})});
+    const data=await res.json().catch(()=>({})); if(!res.ok)throw new Error(data.error||'AI unavailable');
+    const prods=(data.products||[]).map(serverProductToLocal);
+    const answer=esc(data.answer||'').replace(/\n/g,'<br>');
+    out.innerHTML=answer+(prods.length?'<br>'+aiProductCards(prods):'')+(data.track_url?`<br><a class="aq" href="${esc(data.track_url)}">Secure Track Order →</a>`:'');
+  }catch{
+    const r=aiReply(v);
+    out.innerHTML=r.products&&r.products.length?'Ye rahe matching products! 👇<br>'+aiProductCards(r.products):esc(r.text||r);
+  }finally{inp.disabled=false;inp.focus();body.scrollTop=body.scrollHeight;}
 }
 
 /* ---------- promo rotation ---------- */
-const PROMOS=['Original sealed packs','🚚 4–7 din nationwide delivery','💰 COD + prepaid options','🎁 Chaska Boxes for easy gifting'];
+function promoItems(){return ['Original sealed packs',`🚚 ${fallbackDeliveryEstimate()} nationwide delivery`,'💰 COD + prepaid options','🎁 Chaska Boxes for easy gifting'];}
 let promoIdx=0;
 function initPromo(){
   const el=document.getElementById('promoMsg');
@@ -946,8 +1019,8 @@ function initPromo(){
   setInterval(()=>{
     el.classList.add('fading');
     setTimeout(()=>{
-      promoIdx=(promoIdx+1)%PROMOS.length;
-      el.textContent=PROMOS[promoIdx];
+      const promos=promoItems();promoIdx=(promoIdx+1)%promos.length;
+      el.textContent=promos[promoIdx];
       el.classList.remove('fading');
     },350);
   },7000);
@@ -1087,6 +1160,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   (function(){const h=document.querySelector('header');if(!h)return;
     const onS=()=>h.classList.toggle('scrolled',window.scrollY>60);
     window.addEventListener('scroll',onS,{passive:true});onS();})();
+  try{ await loadStorefrontConfig(); }catch(e){}
   if(typeof initAccount==='function') try{ await initAccount(); }catch(e){ console.warn('account init', e); }
   migrateHashURL(); /* migrate old #/shop URLs to clean paths (replaceState) */
   route(); /* Phase 1: route from clean URL path */

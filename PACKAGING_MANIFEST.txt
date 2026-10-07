@@ -1,0 +1,7 @@
+ChaskaBox Muse Staging Candidate v4
+Build label: muse-staging-v4-security-selfservice-ai
+Deployment root: final/
+Migrations: 001-018
+AI: Cloudflare Workers AI optional/free-tier architecture; core commerce independent of AI
+Primary handoff: README_MUSE_FIRST.md -> MUSE_FINAL_DEPLOYMENT_TASKS.md
+Status: STAGING CANDIDATE; NOT production-approved

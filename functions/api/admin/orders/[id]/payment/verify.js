@@ -12,6 +12,7 @@
  * - Every decision is audit-logged with before/after.
  */
 import { withAdmin, sb, json, httpError, readJson, audit } from '../../../_lib/auth.js';
+import { enqueueCustomerNotification } from '../../../_lib/customer-notify.js';
 
 const DECIDABLE = new Set(['payment_submitted', 'awaiting_payment']);
 
@@ -63,5 +64,9 @@ export const onRequestPost = withAdmin(['owner', 'manager', 'fulfilment'], async
     after: { payment_status: nextStatus, note: note || null },
   });
 
-  return json({ order: updated && updated[0], decision });
+  const finalOrder=(updated && updated[0]) || { ...order, ...patch };
+  const trackingBase=String(context.env.PUBLIC_BASE_URL || 'https://chaskabox.online').replace(/\/+$/,'');
+  await enqueueCustomerNotification(context, finalOrder, 'payment_status', nextStatus,
+    `ChaskaBox payment update\nOrder: ${finalOrder.order_number}\nPayment ${decision === 'verified' ? 'verified ✅' : 'rejected'}\nTrack: ${trackingBase}/track-order.html?order=${encodeURIComponent(finalOrder.order_number)}`);
+  return json({ order: finalOrder, decision });
 });

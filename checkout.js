@@ -1,7 +1,7 @@
 /* ChaskaBox checkout logic — V3 review build */
-const DELIVERY_FEE = 300;
-const FREE_ABOVE = 5000;
-const ORDER_EMAIL = 'Chaskabox.mzg@gmail.com';
+let DELIVERY_FEE = 300;
+let PREPAID_DELIVERY_FEE = 300;
+let FREE_ABOVE = 5000;
 const PREPAID_METHODS = new Set(['jazzcash','bank_transfer']);
 const PAYMENT_LABELS = {
   cod: 'Cash on Delivery',
@@ -9,16 +9,36 @@ const PAYMENT_LABELS = {
   bank_transfer: 'Bank Transfer (Advance)'
 };
 let PRODUCTS = [], CART = {}, PAY = 'cod', placingOrder = false;
+let PAYMENT_ENABLED = {cod:true,jazzcash:true,bank_transfer:true};
 const $ = s => document.querySelector(s);
 const fmt = n => 'Rs. ' + Number(n).toLocaleString('en-PK');
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 async function init() {
+  try {
+    const cfg = await fetch('/api/storefront-config', {cache:'no-cache'}).then(r=>r.ok?r.json():null);
+    const st = cfg?.settings || {};
+    const settingNumber = (value, fallback) => { const n = Number(value); return Number.isFinite(n) ? n : fallback; };
+    DELIVERY_FEE = settingNumber(st.cod_delivery_fee_pkr, 300);
+    PREPAID_DELIVERY_FEE = settingNumber(st.prepaid_delivery_fee_pkr, 300);
+    FREE_ABOVE = settingNumber(st.prepaid_free_delivery_threshold_pkr, 5000);
+    PAYMENT_ENABLED = {
+      cod: st.cod_enabled !== false,
+      jazzcash: st.jazzcash_enabled !== false,
+      bank_transfer: st.bank_transfer_enabled !== false
+    };
+    document.querySelectorAll('[data-dynamic-delivery]').forEach(el=>el.textContent='Rs. '+DELIVERY_FEE.toLocaleString('en-PK'));
+    document.querySelectorAll('[data-dynamic-threshold]').forEach(el=>el.textContent='Rs. '+FREE_ABOVE.toLocaleString('en-PK'));
+    applyPaymentAvailability(st);
+  } catch(e){}
   try { CART = JSON.parse(localStorage.getItem('chaskabox-cart') || '{}'); } catch (e) { CART = {}; }
   try {
-    const r = await fetch('/products.json', {cache:'no-cache'});
-    if (!r.ok) throw new Error('Could not load product catalogue');
-    PRODUCTS = await r.json();
+    let loaded=null;
+    for (const url of ['/api/products?fresh=1','/products.json']) {
+      try { const r=await fetch(url,{cache:'no-cache'}); if(!r.ok) throw new Error('HTTP '+r.status); const rows=await r.json(); if(Array.isArray(rows)){loaded=rows;break;} } catch(e) {}
+    }
+    if(!loaded) throw new Error('Could not load product catalogue');
+    PRODUCTS=loaded;
   } catch (e) {
     showOrderError('We could not load the current product catalogue. Please refresh and try again.');
     return;
@@ -66,6 +86,36 @@ async function prefillFromAccount() {
   } catch(e) { console.warn('prefill failed', e); }
 }
 
+
+function applyPaymentAvailability(settings={}) {
+  const map={cod:'pay_cod',jazzcash:'pay_jazz',bank_transfer:'pay_bank'};
+  for(const [method,id] of Object.entries(map)){
+    const label=document.getElementById(id); const radio=label?.querySelector('input[name="pay"]');
+    const enabled=PAYMENT_ENABLED[method] !== false;
+    if(label){ label.hidden=!enabled; label.setAttribute('aria-hidden', enabled?'false':'true'); }
+    if(radio) radio.disabled=!enabled;
+  }
+  const enabledMethods=Object.keys(map).filter(k=>PAYMENT_ENABLED[k]);
+  if(!enabledMethods.length){
+    showOrderError('Ordering is temporarily unavailable because no payment method is enabled. Please contact ChaskaBox.');
+    const b=document.getElementById('placeBtn'); if(b) b.disabled=true;
+    return;
+  }
+  if(!PAYMENT_ENABLED[PAY]) setPay(enabledMethods[0]);
+  const till=String(settings.jazzcash_till_id||'').trim();
+  const qr=String(settings.jazzcash_qr_url||'').trim();
+  const tillEl=document.querySelector('#jazzBox .tillid'); if(tillEl&&till)tillEl.textContent='Till ID: '+till;
+  const qrEl=document.querySelector('#jazzBox img'); if(qrEl&&qr){qrEl.src=qr;qrEl.alt='JazzCash payment QR code';}
+  const bank=settings.bank_transfer_details;
+  if(bank && typeof bank==='object'){
+    const card=document.querySelector('#bankBox .bank-card');
+    const rows=card?.querySelectorAll('div');
+    if(rows?.[0] && bank.bank) rows[0].querySelector('strong').textContent=bank.bank;
+    if(rows?.[1] && bank.account_title) rows[1].querySelector('strong').textContent=bank.account_title;
+    if(rows?.[2] && bank.account_number) rows[2].querySelector('strong').textContent=bank.account_number;
+  }
+}
+
 function productById(id){ return PRODUCTS.find(x => x.id == id); }
 function cartSubtotal() {
   return Object.entries(CART).reduce((s, [id, q]) => {
@@ -74,10 +124,13 @@ function cartSubtotal() {
   }, 0);
 }
 function isPrepaid(){ return PREPAID_METHODS.has(PAY); }
-function deliveryFee(sub) { return isPrepaid() && sub >= FREE_ABOVE ? 0 : DELIVERY_FEE; }
+function deliveryFee(sub) { return isPrepaid() ? (sub >= FREE_ABOVE ? 0 : PREPAID_DELIVERY_FEE) : DELIVERY_FEE; }
 
 function setPay(method) {
-  if (!['cod','jazzcash','bank_transfer'].includes(method)) method = 'cod';
+  const allowed=['cod','jazzcash','bank_transfer'];
+  if (!allowed.includes(method) || PAYMENT_ENABLED[method] === false) {
+    method = allowed.find(m=>PAYMENT_ENABLED[m]) || 'cod';
+  }
   PAY = method;
   $('#pay_cod')?.classList.toggle('sel', method === 'cod');
   $('#pay_jazz')?.classList.toggle('sel', method === 'jazzcash');
@@ -105,7 +158,7 @@ function renderSummary() {
   if (!hint) return;
   if (isPrepaid() && sub < FREE_ABOVE) {
     hint.hidden = false;
-    hint.innerHTML = `💡 Add <b>${fmt(FREE_ABOVE - sub)}</b> more to unlock <b>FREE prepaid delivery</b> and save Rs. 300.`;
+    hint.innerHTML = `💡 Add <b>${fmt(FREE_ABOVE - sub)}</b> more to unlock <b>FREE prepaid delivery</b> and save ${fmt(PREPAID_DELIVERY_FEE)}.`;
   } else if (isPrepaid()) {
     hint.hidden = false;
     hint.innerHTML = '🎉 <b>FREE prepaid delivery unlocked.</b>';
@@ -133,6 +186,7 @@ function checkForm() {
   need.forEach(([f,e,fn]) => {
     const good = fn($('#'+f)?.value || '');
     if ($('#'+e)) $('#'+e).style.display = good ? 'none' : '';
+    if ($('#'+f)) { $('#'+f).setAttribute('aria-invalid', good ? 'false' : 'true'); $('#'+f).setAttribute('aria-describedby', e); }
     if(!good) ok=false;
   });
   if (isPrepaid()) {
@@ -174,11 +228,14 @@ async function placeOrderViaAPI(payload) {
   // Server-authoritative order creation via Cloudflare Function.
   // Returns {ok, data} — data is the API response on success.
   try {
-    const res = await fetch('/api/orders', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
-    });
+    const headers = { 'Content-Type': 'application/json' };
+    try {
+      if (typeof initSupabase === 'function' && await initSupabase() && SB) {
+        const { data } = await SB.auth.getSession();
+        if (data?.session?.access_token) headers.Authorization = `Bearer ${data.session.access_token}`;
+      }
+    } catch(e){}
+    const res = await fetch('/api/orders', { method: 'POST', headers, body: JSON.stringify(payload) });
     const data = await res.json().catch(() => ({}));
     if (res.ok) return { ok: true, data };
     // Surface validation errors clearly
@@ -190,38 +247,11 @@ async function placeOrderViaAPI(payload) {
 }
 
 function uuidv4() {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
-    const r = Math.random() * 16 | 0, v = c === 'x' ? r : (r & 0x3 | 0x8);
-    return v.toString(16);
-  });
+  if (crypto?.randomUUID) return crypto.randomUUID();
+  const a=new Uint8Array(16); crypto.getRandomValues(a); a[6]=(a[6]&15)|64; a[8]=(a[8]&63)|128;
+  return [...a].map((b,i)=>(i===4||i===6||i===8||i===10?'-':'')+b.toString(16).padStart(2,'0')).join('');
 }
 
-async function saveSupabaseOrder(order){
-  try {
-    if (typeof initSupabase !== 'function' || !initSupabase() || !SB) return false;
-    const { data: sess } = await SB.auth.getSession();
-    if (!sess?.session?.user) return false;
-    const { error } = await SB.from('orders').insert({
-      user_id: sess.session.user.id,
-      items: order.items.map(i => ({...i, img:(productById(i.id)||{}).img||''})),
-      subtotal: order.sub,
-      delivery_fee: order.del,
-      total: order.total,
-      pay_method: order.pay_method,
-      name: order.name,
-      phone: order.phone,
-      address: order.addr,
-      city: order.city,
-      video_requested: order.video,
-      status: isPrepaid() ? 'awaiting_payment_verification' : 'pending'
-    });
-    if (error) throw error;
-    return true;
-  } catch(e) {
-    console.warn('supabase order save failed', e);
-    return false;
-  }
-}
 
 function saveLocalPurchaseSummary(order){
   // Intentionally excludes customer name, phone and address. This supports reorder UX without persisting PII.
@@ -338,6 +368,7 @@ async function placeOrder() {
   if ($('#donePayment')) $('#donePayment').textContent = PAYMENT_LABELS[PAY] || PAY;
   if ($('#doneStatus')) $('#doneStatus').textContent = isPrepaid() ? 'Awaiting payment verification' : 'Order received · COD pending';
   if ($('#doneWhatsApp')) $('#doneWhatsApp').href = 'https://wa.me/923320005381?text=' + encodeURIComponent('Salam ChaskaBox, I need help with order '+finalOrderNo);
+  const track = document.getElementById('doneTrack'); if (track) track.href = '/track-order.html?order=' + encodeURIComponent(finalOrderNo) + '&phone=' + encodeURIComponent(phone);
 
   if (PAY === 'cod') {
     $('#doneMsg').innerHTML = `We'll contact <b>${esc(phone)}</b> if confirmation is needed, then prepare your order for dispatch. Amount due on delivery: <b>${fmt(finalTotal)}</b>.`;

@@ -57,7 +57,13 @@ export const onRequestGet = withAdmin(['owner', 'manager', 'content'], async (co
     headers: { Range: rangeHeader },
     count: true,
   });
-  return json({ media: data, page, per_page: per, total, total_pages: Math.ceil(total / per) });
+  const e = env(context);
+  const bucket = e.MEDIA_BUCKET || 'product-media';
+  const media = (data || []).map((m) => ({
+    ...m,
+    url: `${e.SUPABASE_URL}/storage/v1/object/public/${bucket}/${m.object_path}`,
+  }));
+  return json({ media, page, per_page: per, total, total_pages: Math.ceil(total / per) });
 });
 
 export const onRequestPost = withAdmin(['owner', 'manager', 'content'], async (context, { user, role }) => {

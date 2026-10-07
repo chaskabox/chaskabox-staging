@@ -38,12 +38,12 @@
 
           <label class="payopt sel" id="pay_cod">
             <input type="radio" name="pay" value="cod" checked>
-            <span><b>💵 Cash on Delivery</b><small>Pay cash when your order arrives · Rs. 300 delivery</small></span>
+            <span><b>💵 Cash on Delivery</b><small>Pay cash when your order arrives · <span data-dynamic-delivery>Rs. 300</span> delivery</small></span>
           </label>
 
           <label class="payopt" id="pay_jazz">
             <input type="radio" name="pay" value="jazzcash">
-            <span><b>⚡ JazzCash (Advance)</b><small>Prepaid · FREE delivery on orders of Rs. 5,000+</small></span>
+            <span><b>⚡ JazzCash (Advance)</b><small>Prepaid · FREE delivery on orders of <span data-dynamic-threshold>Rs. 5,000</span>+</small></span>
           </label>
 
           <div id="jazzBox" class="payment-details" hidden>
@@ -56,7 +56,7 @@
 
           <label class="payopt" id="pay_bank">
             <input type="radio" name="pay" value="bank_transfer">
-            <span><b>🏦 Bank Transfer (Advance)</b><small>Punjab Bank · FREE delivery on orders of Rs. 5,000+</small></span>
+            <span><b>🏦 Bank Transfer (Advance)</b><small>Punjab Bank · FREE delivery on orders of <span data-dynamic-threshold>Rs. 5,000</span>+</small></span>
           </label>
 
           <div id="bankBox" class="payment-details" hidden>
@@ -120,14 +120,15 @@
       <div><span>Status</span><strong id="doneStatus">—</strong></div>
     </div>
     <p id="doneMsg" class="done-message"></p>
-    <div class="confirm-actions"><a class="cta" href="/">Continue Shopping →</a><a class="cta secondary" id="doneWhatsApp" href="https://wa.me/923320005381" target="_blank" rel="noopener">WhatsApp Support</a></div>
+    <div class="confirm-actions"><a class="cta" id="doneTrack" href="/track-order.html">Track order</a><a class="cta secondary" href="/">Continue Shopping</a><a class="cta secondary" id="doneWhatsApp" href="https://wa.me/923320005381" target="_blank" rel="noopener">WhatsApp Support</a></div>
     <p class="confirmation-tip">Tip: screenshot this screen or save your order number for support.</p>
   </div>
 </section>
 
 <footer><div class="fbottom">© 2026 ChaskaBox · 📞 0332-0005381 · Chaskabox.mzg@gmail.com</div></footer>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
-<script src="/supabase-config.js"></script>
-<script src="/checkout.js?v=6"></script>
-</body>
+<script src="/supabase-config.js?v=4"></script>
+<script src="/analytics.js?v=1"></script>
+<script src="/checkout.js?v=7"></script>
+<script src="/site-runtime.js?v=1" defer></script></body>
 </html>

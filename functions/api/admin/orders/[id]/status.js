@@ -12,6 +12,7 @@
  * - Audit events: order.status_changed | order.cancelled (§5).
  */
 import { withAdmin, sb, json, httpError, readJson, audit } from '../../_lib/auth.js';
+import { enqueueCustomerNotification } from '../../_lib/customer-notify.js';
 
 const TRANSITIONS = {
   new: ['sourcing', 'cancelled'],
@@ -82,5 +83,11 @@ export const onRequestPatch = withAdmin(['owner', 'manager', 'fulfilment'], asyn
     after,
   });
 
-  return json({ order: updated && updated[0], transition: { from: current, to: next } });
+  // Queue customer update durably; enqueue failure can never roll back fulfilment.
+  const finalOrder = (updated && updated[0]) || { ...order, ...patchBody };
+  const trackingBase = String(context.env.PUBLIC_BASE_URL || 'https://chaskabox.online').replace(/\/+$/,'');
+  const label = String(next).replaceAll('_',' ');
+  await enqueueCustomerNotification(context, finalOrder, 'order_status', next,
+    `ChaskaBox order update\nOrder: ${finalOrder.order_number}\nStatus: ${label}\nTrack: ${trackingBase}/track-order.html?order=${encodeURIComponent(finalOrder.order_number)}`);
+  return json({ order: finalOrder, transition: { from: current, to: next } });
 });

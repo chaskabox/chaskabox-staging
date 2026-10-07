@@ -57,7 +57,7 @@ def main():
 
     # small lookup for cart drawer + smart recommendations: id -> {name, price, img, cat, brand}
     lookup = {str(p["id"]): {"name": p["name"], "price": p["price"],
-                             "img": p.get("img"), "cat": p.get("category") or "",
+                             "img": (p.get("img") if p.get("img") and os.path.exists(os.path.join(ROOT, p.get("img"))) else None), "cat": p.get("category") or "",
                              "brand": brand_of(p.get("name"))} for p in products}
     lookup_json = json.dumps(lookup, ensure_ascii=False)
 
@@ -72,6 +72,8 @@ def main():
         old_price = p.get("oldPrice")
         badge = p.get("badge") or ""
         img = p.get("img")  # e.g. "images/p5.webp" or None
+        if img and not os.path.exists(os.path.join(ROOT, img)):
+            img = None
         brand = brand_of(name)
 
         title = f"{name} | ChaskaBox"
@@ -380,6 +382,9 @@ function renderRelated(){
 loadCart(); updateBadge(); loadWish(); syncWishBtn();
 recordView(); renderRelated();
 </script>
+<script src="/supabase-config.js?v=4" defer></script>
+<script src="/analytics.js?v=1" defer></script>
+<script src="/product-runtime.js?v=1" defer></script>
 </body>
 </html>
 """

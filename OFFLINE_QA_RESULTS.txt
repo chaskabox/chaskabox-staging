@@ -1,0 +1,26 @@
+ChaskaBox Muse Staging Candidate v4 — Offline QA
+Date: 2026-10-07
+
+PASS — 63 JavaScript files parsed with node --check.
+PASS — 52 Cloudflare Functions/Worker modules imported successfully for syntax/local-module linkage.
+PASS — Python product generator compiles.
+PASS — SQL migration sequence is continuous 001-018.
+PASS — legacy unsafe admin_hard_delete_product SECURITY DEFINER definition is absent from fresh migration source; migration 016 drops it on upgraded databases.
+PASS — 260 HTML files inspected.
+PASS — 6,269 HTML src/href/poster references inspected; 0 missing physical local asset references. Extensionless public URLs are Cloudflare Pages SPA routes and require staging direct-refresh verification.
+PASS — products.json contains 249 legacy products (ID range 1-272); future Admin-created products use live/dynamic product routing.
+PASS — secret-shaped credential scan: 0 hits.
+PASS — runtime scan found no Meta Graph, Twilio, OpenAI, Gemini, Groq or FormSubmit endpoints in HTML/JavaScript.
+PASS — no packaging junk (__pycache__, pyc, .DS_Store, backup/temp/embedded ZIP files).
+PASS — critical source assertions: Turnstile production/staging requirement path, customer notification outbox worker, public settings allow-list source, dynamic PDP source, migrations 016-018.
+
+NOT CLAIMED OFFLINE:
+- Real Supabase migration/RLS/auth behavior.
+- Real Cloudflare Pages SPA direct-route/refresh behavior.
+- Real Turnstile verification and replay behavior.
+- Real WAHA/Resend delivery and retry behavior.
+- Real Workers AI binding/quota behavior.
+- Actual mobile/desktop rendered browser QA (local Chromium was unreliable in this environment).
+- Backup restore success against a real disposable database/project.
+
+Production status: NO-GO until MUSE_FINAL_DEPLOYMENT_TASKS.md critical staging checks pass and owner explicitly approves production deployment.
