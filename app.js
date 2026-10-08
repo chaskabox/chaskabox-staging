@@ -1180,7 +1180,10 @@ function renderMnav(){
   const cats={}; activeProducts().forEach(p=>{cats[p.category]=cats[p.category]||[];cats[p.category].push(p);});
   const order=['',...CAT_ORDER.filter(c=>cats[c]&&cats[c].length)];
   const catsHtml=order.map(c=>`<a href="${c===''?'/shop/':categoryPath(c)}">${c===''?'🛍️ All Snacks':esc(c)}</a>`).join('');
-  $('#mnavList').innerHTML=catsHtml+`
+  const bc={}; activeProducts().forEach(p=>{const b=getBrand(p.name);bc[b]=(bc[b]||0)+1;});
+  const topBrands=Object.entries(bc).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const brandsHtml=topBrands.length?`<div style="border-top:1px solid var(--border);margin:8px 0"></div><div style="padding:8px 16px 4px;font-size:11px;font-weight:800;color:var(--muted)">🏷️ BRANDS</div>`+topBrands.map(([b,n])=>`<a href="#" onclick="goBrand(&quot;${esc(b)}&quot;);return false">${esc(b)} <span style="opacity:.5">(${n})</span></a>`).join(''):'';
+  $('#mnavList').innerHTML=catsHtml+brandsHtml+`
     <div style="border-top:1px solid var(--border);margin:8px 0"></div>
     <a href="/bundles/">📦 Chaska Boxes</a>
     <a href="/shop/" onclick="goBadge('Sale');return false">🔥 Deals</a>
