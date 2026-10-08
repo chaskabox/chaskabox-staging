@@ -350,6 +350,43 @@
 </div>
 
 <div class="admin-toast" id="adminToast" role="status" aria-live="polite"></div>
+
+<!-- CATEGORY EDITOR MODAL -->
+<div class="admin-modal" id="categoryEditor" aria-hidden="true">
+  <div class="modal-backdrop" data-close-cat-modal></div>
+  <section class="admin-modal-card" role="dialog" aria-modal="true" aria-labelledby="categoryEditorTitle">
+    <div class="modal-head"><div><small>CATEGORY</small><h2 id="categoryEditorTitle">Edit category</h2></div><button class="icon-btn" data-close-cat-modal aria-label="Close">×</button></div>
+    <form id="categoryForm" class="editor-form" style="padding:20px">
+      <input type="hidden" id="catId">
+      <label>Category name<input id="catName" required placeholder="e.g. Chocolates & Candies"></label>
+      <div class="form-two">
+        <label>Slug<input id="catSlug" placeholder="auto-generated"></label>
+        <label>Sort order<input id="catPosition" type="number" value="0"></label>
+      </div>
+      <label>Description<textarea id="catDescription" rows="3"></textarea></label>
+      <div class="form-two">
+        <label>Image URL<input id="catImage" placeholder="/images/cat.webp"></label>
+        <label>Mobile image URL<input id="catMobileImage" placeholder="/images/cat-mobile.webp"></label>
+      </div>
+      <div class="form-two">
+        <label>SEO title<input id="catSeoTitle"></label>
+        <label>Box style<select id="catBoxStyle"><option value="default">Default</option><option value="card">Card</option><option value="circle">Circle</option><option value="banner">Banner</option></select></label>
+      </div>
+      <label>SEO description<textarea id="catSeoDesc" rows="2"></textarea></label>
+      <div class="form-two">
+        <label class="checkline"><input type="checkbox" id="catVisible" checked> Visible in store</label>
+        <label class="checkline"><input type="checkbox" id="catHomepage" checked> Show on homepage</label>
+      </div>
+      <label class="checkline"><input type="checkbox" id="catHideEmpty" checked> Hide if empty</label>
+      <div class="action-row sticky-actions">
+        <button type="button" class="btn danger" id="deleteCategoryBtn" style="display:none">Delete</button>
+        <button type="button" class="btn secondary" data-close-cat-modal>Cancel</button>
+        <button type="submit" class="btn primary">Save category</button>
+      </div>
+    </form>
+  </section>
+</div>
+
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.57.4"></script>
 <script src="/supabase-config.js?v=4"></script>
 <script src="/admin.js?v=3" defer></script>

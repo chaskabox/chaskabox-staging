@@ -136,13 +136,33 @@
     const view=$('#view-security');const [audit,staff]=await Promise.all([api('/api/admin/audit?per_page=50'),api('/api/admin/staff')]);view.innerHTML=`<div class="admin-grid two"><section class="panel"><div class="panel-head"><div><h2>Staff roles</h2><p>Least-privilege access. Owner-only changes.</p></div></div><div class="staff-list">${(staff.staff||[]).map(s=>`<div><code>${esc(s.user_id)}</code><b>${esc(s.role)}</b><span class="pill ${s.active?'on':''}">${s.active?'Active':'Disabled'}</span></div>`).join('')}</div><hr><h3>Invite staff</h3><div class="form-two"><label>Email<input id="staffEmail" type="email"></label><label>Role<select id="staffRole"><option>content</option><option>fulfilment</option><option>manager</option><option>owner</option></select></label></div><button class="btn primary" id="inviteStaff">Send invite</button></section><section class="panel"><div class="panel-head"><div><h2>Recent audit log</h2><p>Who changed what and when.</p></div></div><div class="history-list">${(audit.events||[]).map(a=>`<div><b>${esc(a.action)}</b><small>${fmtDate(a.created_at)} · ${esc(a.actor_role)} · ${esc(a.entity_type)} ${esc(a.entity_id)}</small></div>`).join('')||'<small>No audit events.</small>'}</div></section></div>`;$('#inviteStaff').onclick=async()=>{try{await api('/api/admin/staff',{method:'POST',body:{email:$('#staffEmail').value.trim(),role:$('#staffRole').value}});toast('Staff invite sent');loadSecurity()}catch(e){toast(e.message)}};
   }
 
+  let editingBoxId = null;
+
   function wireBoxLive(){
     $('#saveBoxDraftBtn')?.addEventListener('click',async e=>{if(!me||!roleAllows('owner','manager','content'))return;e.preventDefault();e.stopImmediatePropagation();
       const seen=new Map(); $$('#boxSelectedItems .builder-item').forEach(row=>{const ctl=row.querySelector('[data-id]');const q=Number(row.querySelector('.qty-controls b')?.textContent||0);if(ctl&&q>0)seen.set(Number(ctl.dataset.id),q);});
       const items=[...seen].map(([product_id,quantity])=>({product_id,quantity})); const title=$('#boxName')?.value.trim()||'', selling_price=Number($('#boxPrice')?.value||0);
       if(!title||!items.length||!Number.isInteger(selling_price)||selling_price<0){toast('Box name, selling price and at least one product are required');return;}
-      try{await api('/api/admin/boxes',{method:'POST',body:{title,description:$('#boxDescription')?.value.trim()||'',selling_price,items,visibility:'draft'}});toast('Chaska Box saved securely as draft');await loadProducts();}catch(x){toast(x.message)}
+      try{
+        const body={title,description:$('#boxDescription')?.value.trim()||'',selling_price,items,visibility:'draft'};
+        if(editingBoxId){
+          await api(`/api/admin/boxes/${encodeURIComponent(editingBoxId)}`,{method:'PATCH',body});
+          toast('Chaska Box updated'); editingBoxId=null;
+          $('#saveBoxDraftBtn').textContent='Save Chaska Box';
+        }else{
+          await api('/api/admin/boxes',{method:'POST',body});
+          toast('Chaska Box saved securely as draft');
+        }
+        // Clear form
+        $('#boxName').value=''; $('#boxDescription').value=''; $('#boxPrice').value='';
+        if(typeof window.chaskaLoadBoxItems==='function') window.chaskaLoadBoxItems([]);
+        await loadProducts(); await loadExistingBoxes();
+      }catch(x){toast(x.message)}
     },true);
+    // Clear edit state button
+    $('#boxName')?.addEventListener('input',()=>{
+      if(editingBoxId && !$('#boxName').value){ editingBoxId=null; $('#saveBoxDraftBtn').textContent='Save Chaska Box'; }
+    });
   }
   async function enableBoxBuilder(){
     const d=await api('/api/admin/boxes?per_page=100');
@@ -162,7 +182,7 @@
       listEl.innerHTML=boxes.map(b=>{
         const vis=(b.visibility||'draft').toLowerCase();
         const visClass=vis==='visible'?'visible':(vis==='hidden'?'hidden':'');
-        const itemCount=(b.items||[]).length;
+        const itemCount=b.item_count ?? (b.items||[]).length;
         return `
         <div class="existing-box-card">
           <h4>${esc(b.title||b.name||'Untitled Box')}</h4>
@@ -184,6 +204,9 @@
             const d=await api(`/api/admin/boxes/${encodeURIComponent(boxId)}`);
             const box=d.box||d;
             const items=d.items||box.items||box.products||[];
+            // Track editing state
+            editingBoxId=boxId;
+            $('#saveBoxDraftBtn').textContent='Update Chaska Box';
             // Load box into builder form for editing
             $('#boxName').value=box.title||box.name||'';
             $('#boxDescription').value=box.description||'';
@@ -198,7 +221,7 @@
             if(typeof window.chaskaLoadBoxItems==='function'){
               window.chaskaLoadBoxItems(normalized);
             }
-            toast(`Box loaded — ${normalized.length} product(s) — edit and Save to update`);
+            toast(`Editing box — ${normalized.length} product(s) loaded. Save to update.`);
             $('#boxName').focus();
             $('#boxName').scrollIntoView({behavior:'smooth',block:'center'});
           }catch(e){toast('Failed to load box: '+e.message);}
@@ -214,14 +237,15 @@
   }
 
   // ============ CATEGORIES ============
+  let categoriesCache = [];
   async function loadCategories(){
     const listEl=$('#categoryList'); if(!listEl) return;
     listEl.innerHTML='<p class="muted">Loading…</p>';
     try{
       const d=await api('/api/admin/categories');
-      const cats=d.categories||[];
-      if(!cats.length){listEl.innerHTML='<p class="muted">No categories yet. Click "+ New Category".</p>';return;}
-      listEl.innerHTML=cats.map(c=>`
+      categoriesCache=d.categories||[];
+      if(!categoriesCache.length){listEl.innerHTML='<p class="muted">No categories yet. Click "+ New Category".</p>';return;}
+      listEl.innerHTML=categoriesCache.map(c=>`
         <div class="existing-box-card">
           <h4>${esc(c.name)}</h4>
           <div class="box-meta">
@@ -235,30 +259,79 @@
             <button class="btn secondary compact" data-toggle-cat="${esc(c.id)}">${c.is_visible?'👁️ Hide':'👁️ Show'}</button>
           </div>
         </div>`).join('');
-      listEl.querySelectorAll('[data-edit-cat]').forEach(b=>b.onclick=()=>editCategory(b.dataset.editCat));
+      listEl.querySelectorAll('[data-edit-cat]').forEach(b=>b.onclick=()=>openCategoryEditor(b.dataset.editCat));
       listEl.querySelectorAll('[data-toggle-cat]').forEach(b=>b.onclick=async()=>{
         const id=b.dataset.toggleCat;
-        const cat=cats.find(x=>String(x.id)===id);
+        const cat=categoriesCache.find(x=>String(x.id)===id);
         await api(`/api/admin/categories/${id}`,{method:'PATCH',body:{is_visible:!cat.is_visible}});
         toast(cat.is_visible?'Category hidden':'Category visible'); loadCategories();
       });
     }catch(e){listEl.innerHTML=`<p class="muted">Failed: ${esc(e.message)}</p>`;}
-    $('#refreshCategories')?.addEventListener('click',loadCategories,{once:true});
-    $('#addCategoryBtn')?.addEventListener('click',()=>{
-      const name=prompt('Category name:'); if(!name) return;
-      api('/api/admin/categories',{method:'POST',body:{name}}).then(()=>{toast('Category created');loadCategories();}).catch(e=>toast(e.message));
-    },{once:true});
   }
-  async function editCategory(id){
+  function openCategoryEditor(id){
+    const c=id?categoriesCache.find(x=>String(x.id)===String(id)):null;
+    $('#catId').value=c?.id||'';
+    $('#catName').value=c?.name||'';
+    $('#catSlug').value=c?.slug||'';
+    $('#catDescription').value=c?.description||'';
+    $('#catImage').value=c?.image_url||'';
+    $('#catMobileImage').value=c?.mobile_image_url||'';
+    $('#catSeoTitle').value=c?.seo_title||'';
+    $('#catSeoDesc').value=c?.seo_description||'';
+    $('#catBoxStyle').value=c?.box_style||'default';
+    $('#catPosition').value=c?.position||0;
+    $('#catVisible').checked=c?.is_visible!==false;
+    $('#catHomepage').checked=c?.show_on_homepage!==false;
+    $('#catHideEmpty').checked=c?.hide_if_empty!==false;
+    $('#categoryEditorTitle').textContent=c?'Edit '+c.name:'New category';
+    $('#deleteCategoryBtn').style.display=c?'':'none';
+    $('#deleteCategoryBtn').onclick=()=>deleteCategory(c.id,c.name);
+    $('#categoryEditor').classList.add('open');
+    $('#categoryEditor').setAttribute('aria-hidden','false');
+  }
+  function closeCategoryEditor(){
+    $('#categoryEditor').classList.remove('open');
+    $('#categoryEditor').setAttribute('aria-hidden','true');
+  }
+  async function deleteCategory(id,name){
+    if(!confirm(`Delete category "${name}"? Products will NOT be deleted.`)) return;
     try{
-      const d=await api(`/api/admin/categories/${id}`);
-      const c=d.category;
-      const name=prompt('Name:',c.name); if(name===null) return;
-      const desc=prompt('Description:',c.description||''); if(desc===null) return;
-      await api(`/api/admin/categories/${id}`,{method:'PATCH',body:{name,description:desc}});
-      toast('Category updated'); loadCategories();
+      await api(`/api/admin/categories/${id}`,{method:'DELETE'});
+      toast('Category deleted'); closeCategoryEditor(); loadCategories();
     }catch(e){toast(e.message);}
   }
+  function wireCategoryEditor(){
+    document.querySelectorAll('[data-close-cat-modal]').forEach(b=>b.addEventListener('click',closeCategoryEditor));
+    $('#refreshCategories')?.addEventListener('click',()=>loadCategories());
+    $('#addCategoryBtn')?.addEventListener('click',()=>openCategoryEditor(null));
+    $('#categoryForm')?.addEventListener('submit',async e=>{
+      e.preventDefault();
+      const id=$('#catId').value;
+      const body={
+        name:$('#catName').value.trim(),
+        slug:$('#catSlug').value.trim()||undefined,
+        description:$('#catDescription').value.trim(),
+        image_url:$('#catImage').value.trim(),
+        mobile_image_url:$('#catMobileImage').value.trim(),
+        seo_title:$('#catSeoTitle').value.trim(),
+        seo_description:$('#catSeoDesc').value.trim(),
+        box_style:$('#catBoxStyle').value,
+        position:Number($('#catPosition').value||0),
+        is_visible:$('#catVisible').checked,
+        show_on_homepage:$('#catHomepage').checked,
+        hide_if_empty:$('#catHideEmpty').checked,
+      };
+      try{
+        if(id) await api(`/api/admin/categories/${id}`,{method:'PATCH',body});
+        else await api('/api/admin/categories',{method:'POST',body});
+        toast(id?'Category updated':'Category created');
+        closeCategoryEditor(); loadCategories();
+      }catch(err){toast(err.message);}
+    });
+  }
+  // Wire on boot
+  if(document.readyState==='loading') document.addEventListener('DOMContentLoaded',wireCategoryEditor);
+  else wireCategoryEditor();
 
   // ============ NAVIGATION ============
   async function loadNavigation(){
