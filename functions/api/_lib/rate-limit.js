@@ -22,9 +22,6 @@ async function sha256Hex(value) {
 }
 
 export async function takeToken(key, env, options = {}) {
-  // TEMPORARY STAGING BYPASS (2026-10-08) - re-enabled due to user testing blocked.
-  // PRODUCTION MUST RE-ENABLE before go-live.
-  return { allowed: true, retryAfterSec: 0 };
   const { capacity, perMinute } = cfg(env, options);
   try {
     const opaque = await sha256Hex(`chaskabox:${key}`);
