@@ -124,7 +124,31 @@
     $('#productForm')?.addEventListener('input',renderEditorPreview); $('#productForm')?.addEventListener('change',renderEditorPreview);
     $('#productForm')?.addEventListener('submit',e=>{e.preventDefault(); /* admin-live.js is the only production writer */});
     $('#archiveProduct')?.addEventListener('click',e=>{e.preventDefault();toast('Sign in to archive products through the secure backend.');});
-    $('#aiImproveProduct')?.addEventListener('click',async()=>{const name=$('#editName').value.trim();if(typeof window.chaskaAdminApi!=='function'){showView('assistant');state.aiTask='product_description';$('#aiPrompt').dataset.aiTask='product_description';$('#aiPrompt').value=`Improve this ChaskaBox product listing without making unverified claims. Product: ${name}. Category: ${$('#editCategory').value}. Pack: ${$('#editPack').value}. Current description: ${$('#editDescription').value}`;closeEditor();return;}const b=$('#aiImproveProduct'),old=b.textContent;b.disabled=true;b.textContent='✦ Drafting…';try{const d=await window.chaskaAdminApi('/api/admin/ai',{method:'POST',body:{task:'product_description',context:{name,category:$('#editCategory').value,pack:$('#editPack').value,current_description:$('#editDescription').value}}});$('#editDescription').value=d.draft||$('#editDescription').value;renderEditorPreview();toast('AI draft inserted — review it, then Save');}catch(e){toast(e.message||'Free AI unavailable');}finally{b.disabled=false;b.textContent=old;}});
+    // Image upload handler
+    $('#uploadImageBtn')?.addEventListener('click',()=>$('#imageFileInput')?.click());
+    $('#imageFileInput')?.addEventListener('change',async(e)=>{
+      const file=e.target.files?.[0]; if(!file) return;
+      if(file.size>5*1024*1024){toast('Image must be under 5MB');return;}
+      const btn=$('#uploadImageBtn'), old=btn.textContent; btn.disabled=true; btn.textContent='⏳ Uploading…';
+      try{
+        const fd=new FormData(); fd.append('file',file);
+        const res=await window.chaskaAdminApi('/api/admin/media',{method:'POST',body:fd,rawBody:true});
+        // chaskaAdminApi may not handle FormData; fallback to direct fetch with auth
+        let path=res?.path||res?.url||res?.object_path;
+        if(!path){
+          // Try direct fetch
+          const token=localStorage.getItem('chaskabox_admin_token')||sessionStorage.getItem('chaskabox_admin_token');
+          const r2=await fetch('/api/admin/media',{method:'POST',headers:token?{Authorization:'Bearer '+token}:{},body:fd});
+          const j2=await r2.json().catch(()=>null);
+          path=j2?.path||j2?.url||j2?.object_path;
+          if(!r2.ok) throw new Error(j2?.message||'Upload failed');
+        }
+        if(path){$('#editImage').value=path; renderEditorPreview(); toast('✅ Image uploaded');}
+        else toast('Upload succeeded but no path returned');
+      }catch(err){toast('Upload failed: '+(err.message||err));}
+      finally{btn.disabled=false;btn.textContent=old;e.target.value='';}
+    });
+    $('#aiImproveProduct')?.addEventListener('click',async()=>{const name=$('#editName').value.trim();if(typeof window.chaskaAdminApi!=='function'){showView('assistant');state.aiTask='product_description';$('#aiPrompt').dataset.aiTask='product_description';$('#aiPrompt').value=`Improve this ChaskaBox product listing without making unverified claims. Product: ${name}. Category: ${$('#editCategory').value}. Pack: ${$('#editPack').value}. Current description: ${$('#editDescription').value}`;closeEditor();return;}const b=$('#aiImproveProduct'),old=b.textContent;b.disabled=true;b.textContent='✦ Drafting…';try{const d=await window.chaskaAdminApi('/api/admin/ai',{method:'POST',body:{task:'product_description',context:{name,category:$('#editCategory').value,pack:$('#editPack').value,current_description:$('#editDescription').value}}});$('#editDescription').value=d.draft||$('#editDescription').value;renderEditorPreview();toast('AI draft inserted — review it, then Save');}catch(e){toast(e.message||'Free AI unavailable — AI binding not configured');}finally{b.disabled=false;b.textContent=old;}});
   }
   function editorData(){ return {name:$('#editName').value.trim(),price:Number($('#editPrice').value||0),oldPrice:$('#editOldPrice').value?Number($('#editOldPrice').value):null,category:$('#editCategory').value,pack:$('#editPack').value.trim(),badge:$('#editBadge').value,desc:$('#editDescription').value.trim(),img:$('#editImage').value.trim(),bundle:$('#editBundle').checked}; }
   function renderEditorPreview(){ const p=editorData(); const img=p.img?`/${String(p.img).replace(/^\//,'')}`:''; $('#productPreviewCard').innerHTML=`<div class="preview-product-card"><div class="img">${img?`<img src="${escapeHtml(img)}" alt="">`:'<span style="font-size:44px">🍿</span>'}</div><div class="body"><small>${escapeHtml(p.category||'Category')} · ${escapeHtml(p.pack||'Pack')}</small><h3>${escapeHtml(p.name||'Product name')}</h3><strong>${money(p.price)}</strong><button class="btn primary" type="button" disabled>Add to Bag</button></div></div>`; }

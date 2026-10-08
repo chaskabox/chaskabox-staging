@@ -277,7 +277,7 @@
         <div class="form-two"><label>Category<select id="editCategory"></select></label><label>Pack / size<input id="editPack"></label></div>
         <div class="form-two"><label>Badge<select id="editBadge"><option value="">None</option><option>Sale</option><option>New</option><option>Chaska Pick</option><option>Limited</option></select></label><label>Visibility<select id="editVisibility"><option value="visible">Visible</option><option value="hidden">Hidden</option></select></label></div>
         <label>Description<textarea id="editDescription" rows="5"></textarea></label>
-        <label>Image path<input id="editImage" placeholder="/images/p123.webp"></label>
+        <label>Image path<div style="display:flex;gap:8px"><input id="editImage" placeholder="/images/p123.webp" style="flex:1"><button type="button" class="btn secondary" id="uploadImageBtn" style="white-space:nowrap">📤 Upload</button></div><input type="file" id="imageFileInput" accept="image/jpeg,image/png,image/webp,image/avif" style="display:none"></label>
         <label class="checkline"><input type="checkbox" id="editBundle"> This product is a Chaska Box / bundle</label>
         <div class="action-row sticky-actions"><button type="button" class="btn secondary" id="aiImproveProduct">✦ Improve with Copilot</button><button type="button" class="btn danger" id="archiveProduct">Archive</button><button class="btn primary" type="submit">Save product</button></div>
         <p class="safe-note">Product changes are saved only through the authenticated server API and remain subject to staff permissions.</p>
