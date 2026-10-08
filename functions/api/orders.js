@@ -28,7 +28,7 @@
  * Replay : 200 { ..., idempotent_replay: true }
  */
 
-import { selectOne, selectIn, rpc, isUniqueViolation } from './_lib/db.js';
+import { selectOne, selectIn, rpc, isUniqueViolation, insertRows } from './_lib/db.js';
 import { validateOrderPayload } from './_lib/validate.js';
 import { takeToken, getClientIp } from './_lib/rate-limit.js';
 import { verifyTurnstile } from './_lib/turnstile.js';
@@ -226,6 +226,14 @@ export async function onRequest(context) {
           throw rpcErr;
         }
         const status = result.replay ? 200 : 201;
+        // Queue owner notification (best-effort: never fail the order if this fails)
+        if (!result.replay && result.row?.id) {
+          try {
+            await insertRows(env, 'notification_outbox', [{ order_id: String(result.row.id) }]);
+          } catch (notifyErr) {
+            logError('orders:notify-queue', notifyErr);
+          }
+        }
         return ok(publicOrderShape(result.row, result.replay), status);
       } catch (err) {
         if (isUniqueViolation(err)) {
