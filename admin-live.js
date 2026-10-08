@@ -154,12 +154,22 @@
       const d=await api('/api/admin/boxes?per_page=100');
       const boxes=d.boxes||[];
       if(!boxes.length){listEl.innerHTML='<p class="muted">No boxes created yet. Build one above!</p>';return;}
-      listEl.innerHTML=boxes.map(b=>`
-        <div class="box-product-row" style="align-items:center">
-          <div style="flex:1"><h4>${esc(b.title||b.name||'Untitled Box')}</h4>
-          <small>${money(b.selling_price||b.price||0)} · ${(b.items||[]).length} items · ${esc(b.visibility||'draft')}</small></div>
-          <button class="btn secondary compact" data-edit-box="${esc(b.id)}">Edit</button>
-        </div>`).join('');
+      listEl.innerHTML=boxes.map(b=>{
+        const vis=(b.visibility||'draft').toLowerCase();
+        const visClass=vis==='visible'?'visible':(vis==='hidden'?'hidden':'');
+        const itemCount=(b.items||[]).length;
+        return `
+        <div class="existing-box-card">
+          <h4>${esc(b.title||b.name||'Untitled Box')}</h4>
+          <div class="box-meta">
+            <span class="box-price">${money(b.selling_price||b.price||0)}</span>
+            <span>·</span><span>${itemCount} item${itemCount!==1?'s':''}</span>
+            <span class="box-badge ${visClass}">${esc(b.visibility||'draft')}</span>
+          </div>
+          <div class="box-actions">
+            <button class="btn secondary compact" data-edit-box="${esc(b.id)}">✏️ Edit</button>
+          </div>
+        </div>`;}).join('');
       listEl.querySelectorAll('[data-edit-box]').forEach(btn=>{
         btn.onclick=()=>{
           const box=boxes.find(x=>String(x.id)===btn.dataset.editBox);
@@ -171,6 +181,7 @@
           $('#boxBadge').value=box.badge||'';
           toast('Box loaded — edit and Save to update');
           $('#boxName').focus();
+          $('#boxName').scrollIntoView({behavior:'smooth',block:'center'});
         };
       });
     }catch(e){listEl.innerHTML=`<p class="muted">Failed to load: ${esc(e.message)}</p>`;}
