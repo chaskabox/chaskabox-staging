@@ -171,21 +171,33 @@
           </div>
         </div>`;}).join('');
       listEl.querySelectorAll('[data-edit-box]').forEach(btn=>{
-        btn.onclick=()=>{
-          const box=boxes.find(x=>String(x.id)===btn.dataset.editBox);
-          if(!box) return;
-          // Load box into builder form for editing
-          $('#boxName').value=box.title||box.name||'';
-          $('#boxDescription').value=box.description||'';
-          $('#boxPrice').value=box.selling_price||box.price||'';
-          $('#boxBadge').value=box.badge||'';
-          // Load box items/products into the builder
-          if(typeof window.chaskaLoadBoxItems==='function'){
-            window.chaskaLoadBoxItems(box.items||box.products||[]);
-          }
-          toast('Box loaded — edit and Save to update');
-          $('#boxName').focus();
-          $('#boxName').scrollIntoView({behavior:'smooth',block:'center'});
+        btn.onclick=async()=>{
+          const boxId=btn.dataset.editBox;
+          btn.disabled=true; btn.textContent='⏳…';
+          try{
+            // Fetch full box details with items
+            const d=await api(`/api/admin/boxes/${encodeURIComponent(boxId)}`);
+            const box=d.box||d;
+            const items=d.items||box.items||box.products||[];
+            // Load box into builder form for editing
+            $('#boxName').value=box.title||box.name||'';
+            $('#boxDescription').value=box.description||'';
+            $('#boxPrice').value=box.selling_price||box.price||'';
+            $('#boxBadge').value=box.badge||'';
+            // Load box items/products into the builder
+            // API returns items as {component_product_id, quantity, product}
+            const normalized=items.map(it=>({
+              product_id: it.component_product_id||it.product_id||it.id,
+              quantity: it.quantity||it.qty||1
+            }));
+            if(typeof window.chaskaLoadBoxItems==='function'){
+              window.chaskaLoadBoxItems(normalized);
+            }
+            toast(`Box loaded — ${normalized.length} product(s) — edit and Save to update`);
+            $('#boxName').focus();
+            $('#boxName').scrollIntoView({behavior:'smooth',block:'center'});
+          }catch(e){toast('Failed to load box: '+e.message);}
+          finally{btn.disabled=false;btn.innerHTML='✏️ Edit';}
         };
       });
     }catch(e){listEl.innerHTML=`<p class="muted">Failed to load: ${esc(e.message)}</p>`;}
