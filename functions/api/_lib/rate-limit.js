@@ -36,11 +36,7 @@ export async function takeToken(key, env, options = {}) {
     const row = Array.isArray(result) ? result[0] : result;
     return { allowed: !!row?.allowed, retryAfterSec: Math.max(1, Number(row?.retry_after_sec) || 1) };
   } catch (error) {
-    // URGENT 2026-10-08: Fail OPEN for checkout availability.
-    // Rate limiter DB appears unavailable; blocking all orders is worse than
-    // temporarily allowing them. Log for investigation.
-    // TODO: Fix api_rate_limits RPC and restore fail-closed.
-    console.error('[rate-limit] backend unavailable, FAILING OPEN', error?.message || error);
-    return { allowed: true, retryAfterSec: 0, backendError: true, failOpen: true };
+    console.error('[rate-limit] backend unavailable', error?.message || error);
+    return { allowed: false, retryAfterSec: 60, backendError: true };
   }
 }
