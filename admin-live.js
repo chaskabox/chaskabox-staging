@@ -179,6 +179,10 @@
           $('#boxDescription').value=box.description||'';
           $('#boxPrice').value=box.selling_price||box.price||'';
           $('#boxBadge').value=box.badge||'';
+          // Load box items/products into the builder
+          if(typeof window.chaskaLoadBoxItems==='function'){
+            window.chaskaLoadBoxItems(box.items||box.products||[]);
+          }
           toast('Box loaded — edit and Save to update');
           $('#boxName').focus();
           $('#boxName').scrollIntoView({behavior:'smooth',block:'center'});

@@ -212,5 +212,17 @@
     $('#copyAiOutput')?.addEventListener('click',async()=>{const text=$('#aiOutput').innerText;try{await navigator.clipboard.writeText(text);toast('Draft copied');}catch{toast('Copy unavailable in this browser');}});
   }
 
+  // Expose box item loader for admin-live.js (Edit box feature)
+  // items: array of {product_id, quantity} or {id, qty}
+  window.chaskaLoadBoxItems = function(items){
+    state.box.clear();
+    (items||[]).forEach(it=>{
+      const pid=Number(it.product_id||it.id||it.productId);
+      const qty=Number(it.quantity||it.qty||1);
+      if(pid>0&&qty>0) state.box.set(pid,qty);
+    });
+    renderBoxSummary();
+  };
+
   init();
 })();
