@@ -29,6 +29,7 @@
  */
 
 import { selectOne, selectIn, rpc, isUniqueViolation, insertRows } from './_lib/db.js';
+import { notifyOwner } from './_lib/notify.js';
 import { validateOrderPayload } from './_lib/validate.js';
 import { takeToken, getClientIp } from './_lib/rate-limit.js';
 import { verifyTurnstile } from './_lib/turnstile.js';
@@ -232,6 +233,29 @@ export async function onRequest(context) {
             await insertRows(env, 'notification_outbox', [{ order_id: String(result.row.id) }]);
           } catch (notifyErr) {
             logError('orders:notify-queue', notifyErr);
+          }
+          // Direct Resend/WAHA notification (best-effort, async)
+          // This ensures owner gets notified even without outbox processor
+          try {
+            const orderForNotify = {
+              id: result.row.id,
+              order_number: result.row.order_number,
+              customer_name: value.customer.name,
+              customer_phone: value.customer.phone,
+              total: result.row.total,
+              payment_method: result.row.payment_method,
+              payment_status: result.row.payment_status,
+              created_at: result.row.created_at,
+            };
+            const notifyResult = await notifyOwner(env, orderForNotify);
+            logError('orders:notify-direct', new Error(JSON.stringify({
+              email_sent: notifyResult.email_sent,
+              email_error: notifyResult.email_error,
+              whatsapp_sent: notifyResult.whatsapp_sent,
+              whatsapp_error: notifyResult.whatsapp_error,
+            })));
+          } catch (directNotifyErr) {
+            logError('orders:notify-direct-fail', directNotifyErr);
           }
         }
         return ok(publicOrderShape(result.row, result.replay), status);
