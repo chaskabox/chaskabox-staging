@@ -139,7 +139,42 @@
       try{await api('/api/admin/boxes',{method:'POST',body:{title,description:$('#boxDescription')?.value.trim()||'',selling_price,items,visibility:'draft'}});toast('Chaska Box saved securely as draft');await loadProducts();}catch(x){toast(x.message)}
     },true);
   }
-  async function enableBoxBuilder(){ const d=await api('/api/admin/boxes?per_page=100'); const panel=$('#view-boxes .builder-summary'); if(panel&&!$('#liveBoxList')) panel.insertAdjacentHTML('beforeend',`<div id="liveBoxList" class="safe-note" style="margin-top:12px">${(d.boxes||[]).length} secure box draft(s)/product(s) currently in database.</div>`); }
+  async function enableBoxBuilder(){
+    const d=await api('/api/admin/boxes?per_page=100');
+    const panel=$('#view-boxes .builder-summary');
+    if(panel&&!$('#liveBoxList')) panel.insertAdjacentHTML('beforeend',`<div id="liveBoxList" class="safe-note" style="margin-top:12px">${(d.boxes||[]).length} secure box draft(s)/product(s) currently in database.</div>`);
+    // Load existing boxes list
+    await loadExistingBoxes();
+    $('#refreshBoxList')?.addEventListener('click',loadExistingBoxes);
+  }
+  async function loadExistingBoxes(){
+    const listEl=$('#existingBoxList'); if(!listEl) return;
+    listEl.innerHTML='<p class="muted">Loading…</p>';
+    try{
+      const d=await api('/api/admin/boxes?per_page=100');
+      const boxes=d.boxes||[];
+      if(!boxes.length){listEl.innerHTML='<p class="muted">No boxes created yet. Build one above!</p>';return;}
+      listEl.innerHTML=boxes.map(b=>`
+        <div class="box-product-row" style="align-items:center">
+          <div style="flex:1"><h4>${esc(b.title||b.name||'Untitled Box')}</h4>
+          <small>${money(b.selling_price||b.price||0)} · ${(b.items||[]).length} items · ${esc(b.visibility||'draft')}</small></div>
+          <button class="btn secondary compact" data-edit-box="${esc(b.id)}">Edit</button>
+        </div>`).join('');
+      listEl.querySelectorAll('[data-edit-box]').forEach(btn=>{
+        btn.onclick=()=>{
+          const box=boxes.find(x=>String(x.id)===btn.dataset.editBox);
+          if(!box) return;
+          // Load box into builder form for editing
+          $('#boxName').value=box.title||box.name||'';
+          $('#boxDescription').value=box.description||'';
+          $('#boxPrice').value=box.selling_price||box.price||'';
+          $('#boxBadge').value=box.badge||'';
+          toast('Box loaded — edit and Save to update');
+          $('#boxName').focus();
+        };
+      });
+    }catch(e){listEl.innerHTML=`<p class="muted">Failed to load: ${esc(e.message)}</p>`;}
+  }
 
   async function init(){
     if(!(await ensureClient())){showLogin('Public Supabase configuration could not be loaded.');return;}
