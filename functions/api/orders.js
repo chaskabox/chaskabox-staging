@@ -134,8 +134,9 @@ export async function onRequest(context) {
   }
 
   // ---- rate limit (per IP, endpoint-namespaced) ----
+  // Explicit limits: 30/min allows normal checkout, blocks rapid bursts
   const ip = getClientIp(request);
-  const rl = await takeToken(`orders:${ip}`, env);
+  const rl = await takeToken(`orders:${ip}`, env, { capacity: 30, perMinute: 30 });
   if (!rl.allowed) {
     return Errors.rateLimited(rl.retryAfterSec);
   }
