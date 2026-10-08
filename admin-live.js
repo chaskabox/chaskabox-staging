@@ -38,6 +38,11 @@
       if(name==='security' && roleAllows('owner')) await loadSecurity();
       if(name==='products' && roleAllows('owner','manager','content')) await loadProducts();
       if(name==='boxes' && roleAllows('owner','manager','content')) await enableBoxBuilder();
+      if(name==='categories' && roleAllows('owner','manager','content')) await loadCategories();
+      if(name==='navigation' && roleAllows('owner','manager','content')) await loadNavigation();
+      if(name==='notifications' && roleAllows('owner','manager')) await loadNotifications();
+      if(name==='health' && roleAllows('owner','manager')) await loadHealth();
+      if(name==='assistant' && roleAllows('owner','manager','content')) await loadAICenter();
     }catch(e){toast(e.message)}
   }
   async function bootAuthenticated(){
@@ -207,5 +212,152 @@
     if(!(await ensureClient())){showLogin('Public Supabase configuration could not be loaded.');return;}
     const {data}=await SB.auth.getSession();session=data?.session||null;if(!session){showLogin();return;}await bootAuthenticated();
   }
+
+  // ============ CATEGORIES ============
+  async function loadCategories(){
+    const listEl=$('#categoryList'); if(!listEl) return;
+    listEl.innerHTML='<p class="muted">Loading…</p>';
+    try{
+      const d=await api('/api/admin/categories');
+      const cats=d.categories||[];
+      if(!cats.length){listEl.innerHTML='<p class="muted">No categories yet. Click "+ New Category".</p>';return;}
+      listEl.innerHTML=cats.map(c=>`
+        <div class="existing-box-card">
+          <h4>${esc(c.name)}</h4>
+          <div class="box-meta">
+            <span>/${esc(c.slug)}</span><span>·</span>
+            <span>${c.product_count||0} products</span>
+            <span class="box-badge ${c.is_visible?'visible':'hidden'}">${c.is_visible?'Visible':'Hidden'}</span>
+            ${c.show_on_homepage?'<span class="box-badge">Homepage</span>':''}
+          </div>
+          <div class="box-actions">
+            <button class="btn secondary compact" data-edit-cat="${esc(c.id)}">✏️ Edit</button>
+            <button class="btn secondary compact" data-toggle-cat="${esc(c.id)}">${c.is_visible?'👁️ Hide':'👁️ Show'}</button>
+          </div>
+        </div>`).join('');
+      listEl.querySelectorAll('[data-edit-cat]').forEach(b=>b.onclick=()=>editCategory(b.dataset.editCat));
+      listEl.querySelectorAll('[data-toggle-cat]').forEach(b=>b.onclick=async()=>{
+        const id=b.dataset.toggleCat;
+        const cat=cats.find(x=>String(x.id)===id);
+        await api(`/api/admin/categories/${id}`,{method:'PATCH',body:{is_visible:!cat.is_visible}});
+        toast(cat.is_visible?'Category hidden':'Category visible'); loadCategories();
+      });
+    }catch(e){listEl.innerHTML=`<p class="muted">Failed: ${esc(e.message)}</p>`;}
+    $('#refreshCategories')?.addEventListener('click',loadCategories,{once:true});
+    $('#addCategoryBtn')?.addEventListener('click',()=>{
+      const name=prompt('Category name:'); if(!name) return;
+      api('/api/admin/categories',{method:'POST',body:{name}}).then(()=>{toast('Category created');loadCategories();}).catch(e=>toast(e.message));
+    },{once:true});
+  }
+  async function editCategory(id){
+    try{
+      const d=await api(`/api/admin/categories/${id}`);
+      const c=d.category;
+      const name=prompt('Name:',c.name); if(name===null) return;
+      const desc=prompt('Description:',c.description||''); if(desc===null) return;
+      await api(`/api/admin/categories/${id}`,{method:'PATCH',body:{name,description:desc}});
+      toast('Category updated'); loadCategories();
+    }catch(e){toast(e.message);}
+  }
+
+  // ============ NAVIGATION ============
+  async function loadNavigation(){
+    try{
+      const d=await api('/api/admin/navigation');
+      const nav=d.navigation||{header:[],footer:[],mobile:[]};
+      const render=(items,elId)=>{
+        const el=$(elId); if(!el) return;
+        el.innerHTML=items.length?items.map(i=>`
+          <div><span class="drag">⋮⋮</span><b>${esc(i.label)}</b><em>${esc(i.url)}</em>
+          <button data-nav-toggle="${i.id}">${i.is_enabled?'✓':'✗'}</button></div>`).join('')
+          :'<p class="muted">No items. Click + Add.</p>';
+      };
+      render(nav.header,'#headerNavList'); render(nav.footer,'#footerNavList');
+    }catch(e){toast(e.message);}
+  }
+
+  // ============ NOTIFICATIONS ============
+  async function loadNotifications(){
+    try{
+      const d=await api('/api/admin/notifications');
+      const st=$('#notifServiceStatus');
+      if(st){
+        const r=d.resend||{}, w=d.waha||{};
+        st.innerHTML=`
+          <div style="display:grid;gap:10px">
+            <div><b>📧 Resend Email</b><br>
+              <span class="box-badge ${r.configured?'visible':'hidden'}">${r.configured?'Configured':'Not configured'}</span>
+              ${!r.has_api_key?'<br><small class="muted">RESEND_API_KEY missing</small>':''}
+              ${!r.has_owner_email?'<br><small class="muted">OWNER_ORDER_EMAIL missing</small>':''}
+            </div>
+            <div><b>📱 WhatsApp/WAHA</b><br>
+              <span class="box-badge ${w.configured?'visible':'hidden'}">${w.configured?'Configured':'Not configured'}</span>
+            </div>
+          </div>`;
+      }
+      const ob=$('#notifOutboxStats');
+      if(ob){
+        const o=d.owner_outbox||{}, c=d.customer_outbox||{};
+        ob.innerHTML=`
+          <div style="display:grid;gap:8px;font-size:12px">
+            <div><b>Owner outbox:</b> ${o.pending||0} pending · ${o.sent||0} sent · ${o.failed||0} failed</div>
+            <div><b>Customer outbox:</b> ${c.pending||0} pending · ${c.sent||0} sent · ${c.failed||0} failed</div>
+          </div>`;
+      }
+      const fl=$('#notifFailures');
+      if(fl){
+        const fails=d.recent_failures||[];
+        fl.innerHTML=fails.length?fails.map(f=>`
+          <div class="box-product-row"><div style="flex:1">
+            <h4>Order ${esc(f.order_id||'—')}</h4>
+            <small>${esc(f.error||f.last_error||'Failed')}</small></div>
+            <button class="btn secondary compact" onclick="toast('Retry via Orders → Retry notification')">Retry</button>
+          </div>`).join(''):'<p class="muted">No failures. 🎉</p>';
+      }
+    }catch(e){toast(e.message);}
+    $('#refreshNotifStatus')?.addEventListener('click',loadNotifications,{once:true});
+  }
+
+  // ============ SYSTEM HEALTH ============
+  async function loadHealth(){
+    const grid=$('#healthGrid'); if(grid) grid.innerHTML='<p class="muted">Checking…</p>';
+    try{
+      const h=await api('/api/admin/health');
+      const services=[
+        ['🗄️ Supabase',h.supabase?.status],
+        ['🛡️ Turnstile',h.turnstile?.status],
+        ['📧 Resend',h.resend?.status],
+        ['✦ AI',h.ai?.status],
+        ['⚡ Functions',h.functions?.status],
+      ];
+      if(grid) grid.innerHTML=services.map(([name,st])=>{
+        const ok=st==='connected'||st==='configured'||st==='ok';
+        const warn=st==='not_configured'||st==='missing';
+        return `<div class="existing-box-card"><h4>${name}</h4>
+          <span class="box-badge ${ok?'visible':warn?'':'hidden'}">${esc(st||'unknown')}</span></div>`;
+      }).join('');
+      const di=$('#deployInfo');
+      if(di) di.innerHTML=`<div style="font-size:12px;display:grid;gap:6px">
+        <div><b>Commit:</b> <code>${esc(h.deployment?.commit||'unknown')}</code></div>
+        <div><b>Branch:</b> ${esc(h.deployment?.branch||'unknown')}</div>
+        <div><b>Checked:</b> ${esc(h.timestamp||'')}</div></div>`;
+    }catch(e){ if(grid) grid.innerHTML=`<p class="muted">Failed: ${esc(e.message)}</p>`; }
+    $('#refreshHealth')?.addEventListener('click',loadHealth,{once:true});
+  }
+
+  // ============ AI CENTER ============
+  async function loadAICenter(){
+    // AI Center enhancements: health indicator
+    try{
+      const h=await api('/api/admin/health').catch(()=>null);
+      const aiStatus=h?.ai?.status||'unknown';
+      const banner=$('#view-assistant .panel-head');
+      if(banner && !$('#aiHealthBadge')){
+        banner.insertAdjacentHTML('beforeend',
+          `<span id="aiHealthBadge" class="box-badge ${aiStatus==='connected'?'visible':'hidden'}">AI: ${esc(aiStatus)}</span>`);
+      }
+    }catch{}
+  }
+
   document.readyState==='loading'?document.addEventListener('DOMContentLoaded',init):init();
 })();

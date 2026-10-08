@@ -19,14 +19,18 @@
       <button class="admin-nav-btn active" data-view="dashboard"><span>▦</span> Dashboard</button>
       <button class="admin-nav-btn" data-view="orders"><span>▤</span> Orders <b class="nav-count" id="orderNavCount">—</b></button>
       <button class="admin-nav-btn" data-view="products"><span>◫</span> Products <b class="nav-count" id="productNavCount">—</b></button>
+      <button class="admin-nav-btn" data-view="categories"><span>📁</span> Categories</button>
       <button class="admin-nav-btn" data-view="boxes"><span>📦</span> Chaska Box Builder</button>
-      <button class="admin-nav-btn" data-view="homepage"><span>⌂</span> Homepage</button>
+      <button class="admin-nav-btn" data-view="homepage"><span>⌂</span> Homepage Builder</button>
+      <button class="admin-nav-btn" data-view="navigation"><span>🧭</span> Navigation</button>
       <button class="admin-nav-btn" data-view="customers"><span>♙</span> Customers</button>
       <button class="admin-nav-btn" data-view="reviews"><span>★</span> Reviews</button>
-      <button class="admin-nav-btn" data-view="media"><span>▣</span> Media</button>
+      <button class="admin-nav-btn" data-view="media"><span>▣</span> Media Library</button>
+      <button class="admin-nav-btn" data-view="notifications"><span>🔔</span> Notifications</button>
+      <button class="admin-nav-btn" data-view="assistant"><span>✦</span> AI Center</button>
+      <button class="admin-nav-btn" data-view="health"><span>💚</span> System Health</button>
       <button class="admin-nav-btn" data-view="preview"><span>◉</span> Site Preview</button>
-      <button class="admin-nav-btn" data-view="assistant"><span>✦</span> Admin Copilot</button>
-      <button class="admin-nav-btn" data-view="settings"><span>⚙</span> Settings</button>
+      <button class="admin-nav-btn" data-view="settings"><span>⚙</span> Store Settings</button>
       <button class="admin-nav-btn" data-view="security"><span>🔐</span> Security & Audit</button>
     </nav>
     <div class="admin-sidebar-foot">
@@ -263,6 +267,60 @@
             <div class="empty-mini">Sign in as Owner to load the live audit history.</div>
           </section>
         </div>
+      </section>
+
+      <section class="admin-view" id="view-categories" data-title="Categories" data-subtitle="Manage product categories, collections and catalog boxes.">
+        <div class="panel">
+          <div class="panel-head">
+            <div><h2>All Categories</h2><p>Create, edit, reorder and control visibility.</p></div>
+            <div style="display:flex;gap:8px">
+              <button class="btn secondary" id="refreshCategories">↻ Refresh</button>
+              <button class="btn primary" id="addCategoryBtn">+ New Category</button>
+            </div>
+          </div>
+          <div id="categoryList" class="existing-box-grid"><p class="muted">Sign in to load categories.</p></div>
+        </div>
+      </section>
+
+      <section class="admin-view" id="view-navigation" data-title="Navigation" data-subtitle="Edit header, footer and mobile menus.">
+        <div class="admin-grid two">
+          <section class="panel">
+            <div class="panel-head"><div><h2>Header Menu</h2></div><button class="btn secondary compact" id="addHeaderNav">+ Add</button></div>
+            <div id="headerNavList" class="section-manager"><p class="muted">Loading…</p></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><h2>Footer Menu</h2></div><button class="btn secondary compact" id="addFooterNav">+ Add</button></div>
+            <div id="footerNavList" class="section-manager"><p class="muted">Loading…</p></div>
+          </section>
+        </div>
+      </section>
+
+      <section class="admin-view" id="view-notifications" data-title="Notification Center" data-subtitle="Resend email, WhatsApp/WAHA status, outbox queue and retry.">
+        <div class="admin-grid two">
+          <section class="panel">
+            <div class="panel-head"><div><h2>Service Status</h2></div><button class="btn secondary compact" id="refreshNotifStatus">↻ Refresh</button></div>
+            <div id="notifServiceStatus"><p class="muted">Loading…</p></div>
+          </section>
+          <section class="panel">
+            <div class="panel-head"><div><h2>Outbox Queue</h2><p>Owner + customer notifications</p></div></div>
+            <div id="notifOutboxStats"><p class="muted">Loading…</p></div>
+          </section>
+        </div>
+        <section class="panel" style="margin-top:16px">
+          <div class="panel-head"><div><h2>Recent Failures</h2><p>Failed notifications with retry option</p></div></div>
+          <div id="notifFailures"><p class="muted">Loading…</p></div>
+        </section>
+      </section>
+
+      <section class="admin-view" id="view-health" data-title="System Health" data-subtitle="Read-only service status. No secrets exposed.">
+        <div class="panel">
+          <div class="panel-head"><div><h2>Services</h2></div><button class="btn secondary compact" id="refreshHealth">↻ Refresh</button></div>
+          <div id="healthGrid" class="existing-box-grid"><p class="muted">Loading…</p></div>
+        </div>
+        <section class="panel" style="margin-top:16px">
+          <div class="panel-head"><div><h2>Deployment</h2></div></div>
+          <div id="deployInfo"><p class="muted">Loading…</p></div>
+        </section>
       </section>
     </main>
   </div>
