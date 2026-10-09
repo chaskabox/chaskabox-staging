@@ -1,0 +1,42 @@
+name: Verify Production Test Order
+
+on:
+  workflow_dispatch:
+    inputs:
+      order_number:
+        description: 'Order number to verify'
+        required: true
+        default: 'CB-091026-85646'
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Verify order in production DB
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+          ORDER_NUM: ${{ inputs.order_number }}
+        run: |
+          echo "=== Order count (should be 1) ==="
+          psql "$PROD_DB_URL" -t -c "SELECT count(*) FROM orders WHERE order_number='$ORDER_NUM';"
+          
+          echo ""
+          echo "=== Order details ==="
+          psql "$PROD_DB_URL" -c "SELECT order_number, total, payment_method, fulfilment_status, email_sent, whatsapp_sent, created_at FROM orders WHERE order_number='$ORDER_NUM';"
+          
+          echo ""
+          echo "=== Order items ==="
+          psql "$PROD_DB_URL" -c "SELECT product_name, quantity, unit_price FROM order_items WHERE order_id=(SELECT id FROM orders WHERE order_number='$ORDER_NUM' LIMIT 1);"
+          
+          echo ""
+          echo "=== Notification outbox ==="
+          psql "$PROD_DB_URL" -c "SELECT count(*) AS outbox_count FROM notification_outbox WHERE order_id=(SELECT id FROM orders WHERE order_number='$ORDER_NUM' LIMIT 1);" 2>&1 || echo "notification_outbox table check done"
+          
+          echo ""
+          echo "=== Duplicate check ==="
+          psql "$PROD_DB_URL" -t -c "SELECT order_number, count(*) FROM orders WHERE order_number='$ORDER_NUM' GROUP BY order_number HAVING count(*) > 1;" || echo "No duplicates"
