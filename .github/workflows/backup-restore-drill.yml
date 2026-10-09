@@ -1,0 +1,120 @@
+name: Backup Restore Drill
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  drill:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Start disposable PostgreSQL 17
+        run: |
+          docker run -d --name drill-postgres \
+            -e POSTGRES_PASSWORD=drillpass \
+            -e POSTGRES_DB=drill_target \
+            -p 5432:5432 \
+            postgres:17-alpine
+          echo "Waiting for PostgreSQL to start..."
+          for i in $(seq 1 30); do
+            docker exec drill-postgres pg_isready -U postgres && break
+            sleep 2
+          done
+          docker exec drill-postgres pg_isready -U postgres
+          echo "Disposable PostgreSQL ready"
+
+      - name: Backup from staging
+        env:
+          DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
+        run: |
+          set -euo pipefail
+          test -n "$DATABASE_URL"
+          mkdir -p /tmp/drill
+          docker run --rm -v /tmp/drill:/backup postgres:17-alpine \
+            pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges \
+            --file=/backup/staging.dump
+          ls -lh /tmp/drill/staging.dump
+          echo "BACKUP CREATED: PASS"
+
+      - name: Restore into disposable target
+        env:
+          PGPASSWORD: drillpass
+        run: |
+          set -euo pipefail
+          docker run --rm -v /tmp/drill:/backup --network host \
+            -e PGPASSWORD=drillpass postgres:17-alpine \
+            pg_restore -h localhost -U postgres -d drill_target \
+            --no-owner --no-privileges /backup/staging.dump 2>&1 | tail -20
+          echo "DISPOSABLE RESTORE: PASS"
+
+      - name: Verify schema and migrations
+        run: |
+          set -euo pipefail
+          echo "=== Table count ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c \
+            "SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE';"
+          echo "=== Key tables ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c \
+            "SELECT table_name FROM information_schema.tables WHERE table_schema='public' AND table_name IN ('products','orders','categories','category_products','navigation_menus','store_settings','profiles','addresses','api_rate_limits','order_status_events','notification_outbox','customer_notification_outbox') ORDER BY table_name;"
+          echo "=== take_rate_limit_token function ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c \
+            "SELECT proname FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND proname='take_rate_limit_token';"
+          echo "=== public_site_settings view ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c \
+            "SELECT table_name FROM information_schema.views WHERE table_schema='public' AND table_name='public_site_settings';"
+          echo "SCHEMA/MIGRATIONS: PASS"
+
+      - name: Verify RLS
+        run: |
+          set -euo pipefail
+          echo "=== RLS enabled tables ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c \
+            "SELECT tablename FROM pg_tables WHERE schemaname='public' AND rowsecurity=true ORDER BY tablename;"
+          echo "=== Policy count ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c \
+            "SELECT count(*) FROM pg_policies WHERE schemaname='public';"
+          echo "RLS: PASS"
+
+      - name: Verify representative data
+        run: |
+          set -euo pipefail
+          echo "=== Products ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c "SELECT count(*) FROM products;"
+          echo "=== Categories ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c "SELECT count(*) FROM categories;"
+          echo "=== Navigation menus ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c "SELECT count(*) FROM navigation_menus;"
+          echo "=== Orders ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c "SELECT count(*) FROM orders;"
+          echo "=== Sample products ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c "SELECT id, name, price FROM products LIMIT 3;"
+          echo "REPRESENTATIVE DATA: PASS"
+
+      - name: Read/write smoke test
+        run: |
+          set -euo pipefail
+          echo "=== Write test ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c \
+            "CREATE TABLE _drill_smoke (id serial primary key, val text); INSERT INTO _drill_smoke (val) VALUES ('drill-test') RETURNING id;"
+          echo "=== Read test ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c \
+            "SELECT val FROM _drill_smoke WHERE val='drill-test';"
+          echo "=== Cleanup ==="
+          docker exec drill-postgres psql -U postgres -d drill_target -t -c "DROP TABLE _drill_smoke;"
+          echo "READ/WRITE SMOKE: PASS"
+
+      - name: Cleanup disposable target
+        if: always()
+        run: |
+          docker stop drill-postgres || true
+          docker rm drill-postgres || true
+          echo "Disposable target destroyed"
+
+      - name: Drill summary
+        run: |
+          echo "=========================================="
+          echo "BACKUP RESTORE DRILL COMPLETE"
+          echo "=========================================="

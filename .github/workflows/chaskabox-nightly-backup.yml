@@ -13,14 +13,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - name: Install PostgreSQL client
-        run: |
-          sudo apt-get update && sudo apt-get install -y curl ca-certificates lsb-release
-          sudo install -d /usr/share/postgresql-common/pgdg
-          sudo curl -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc --fail https://www.postgresql.org/media/keys/ACCC4CF6.asc
-          sudo sh -c 'echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" > /etc/apt/sources.list.d/pgdg.list'
-          sudo apt-get update && sudo apt-get install -y postgresql-client-17
-          pg_dump --version
+      - name: Verify pg_dump via Docker (PostgreSQL 17)
+        run: docker run --rm postgres:17-alpine pg_dump --version
 
       - name: Create compressed database dump
         env:
@@ -30,8 +24,11 @@ jobs:
           test -n "$DATABASE_URL"
           mkdir -p backup
           stamp="$(date -u +'%Y%m%dT%H%M%SZ')"
-          pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges --file="backup/chaskabox-${stamp}.dump"
+          docker run --rm -v "$PWD/backup:/backup" postgres:17-alpine \
+            pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges \
+            --file="/backup/chaskabox-${stamp}.dump"
           sha256sum "backup/chaskabox-${stamp}.dump" > "backup/chaskabox-${stamp}.dump.sha256"
+          ls -lh backup/
 
       - name: Upload encrypted-in-transit backup to Cloudflare R2
         env:
