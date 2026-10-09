@@ -14,7 +14,7 @@ jobs:
 
       - name: Read-only order check
         env:
-          PROD_DB_URL: ${{ secrets.PROD_DB_URL }}
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
         run: |
           psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -P null='[NULL]' <<'EOF'
           \echo '=== NEW ORDERS (created_at > watermark) ==='
