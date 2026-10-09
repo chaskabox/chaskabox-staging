@@ -1,0 +1,26 @@
+name: TEMP Email Runtime Verification
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Read-only production orders check
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+        run: |
+          psql "$PROD_DB_URL" -At -F ' | ' -c "
+          SELECT order_number, subtotal, delivery_fee, total, email_sent, created_at
+          FROM orders
+          WHERE created_at > '2026-10-09T11:27:16Z'::timestamptz
+          ORDER BY created_at ASC;
+          "
+          echo '--- DUPLICATE CHECK ---'
+          psql "$PROD_DB_URL" -At -F ' | ' -c "
+          SELECT order_number, COUNT(*) FROM orders GROUP BY order_number HAVING COUNT(*) > 1;
+          "
+          echo '--- TOTALS ---'
+          psql "$PROD_DB_URL" -At -F ' | ' -c "
+          SELECT COUNT(*) AS total_orders, MAX(created_at) AS max_created FROM orders;
+          "
