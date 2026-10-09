@@ -20,6 +20,14 @@ jobs:
         run: |
           set -e
           for f in \
+            database/migrations/001_products.sql \
+            database/migrations/002_orders.sql \
+            database/migrations/003_bundles.sql \
+            database/migrations/004_engagement.sql \
+            database/migrations/005_admin.sql \
+            database/migrations/006_rls.sql \
+            database/migrations/007_seed_products.sql \
+            database/migrations/008_customer_note.sql \
             database/migrations/009_notifications.sql \
             database/migrations/010_atomic_orders_customer_profiles.sql \
             database/migrations/011_distributed_rate_limit.sql \
