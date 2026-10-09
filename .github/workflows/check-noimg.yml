@@ -1,0 +1,23 @@
+name: Check Products Without Images
+on: workflow_dispatch
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Count products without images
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+        run: |
+          echo "=== Products columns ==="
+          psql "$PROD_DB_URL" -c "\d products" 2>&1 | grep -iE "img|image|photo|visible|active|is_" | head -10
+          echo ""
+          echo "=== Count by image status ==="
+          psql "$PROD_DB_URL" -c "
+          SELECT 
+            count(*) as total,
+            count(*) FILTER (WHERE img IS NULL OR img = '') as no_image,
+            count(*) FILTER (WHERE img IS NOT NULL AND img != '') as has_image
+          FROM products;
+          " 2>&1
