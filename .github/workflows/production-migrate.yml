@@ -20,17 +20,17 @@ jobs:
         run: |
           set -e
           for f in \
-            final/database/migrations/009_notifications.sql \
-            final/database/migrations/010_atomic_orders_customer_profiles.sql \
-            final/database/migrations/011_distributed_rate_limit.sql \
-            final/database/migrations/012_order_status_events.sql \
-            final/database/migrations/013_notification_outbox.sql \
-            final/database/migrations/014_free_ai_features.sql \
-            final/database/migrations/015_admin_product_id_sequence.sql \
-            final/database/migrations/016_security_settings_hardening.sql \
-            final/database/migrations/017_customer_notification_outbox.sql \
-            final/database/migrations/018_public_surface_hardening.sql \
-            final/database/migrations/019_admin_cms.sql ; do
+            database/migrations/009_notifications.sql \
+            database/migrations/010_atomic_orders_customer_profiles.sql \
+            database/migrations/011_distributed_rate_limit.sql \
+            database/migrations/012_order_status_events.sql \
+            database/migrations/013_notification_outbox.sql \
+            database/migrations/014_free_ai_features.sql \
+            database/migrations/015_admin_product_id_sequence.sql \
+            database/migrations/016_security_settings_hardening.sql \
+            database/migrations/017_customer_notification_outbox.sql \
+            database/migrations/018_public_surface_hardening.sql \
+            database/migrations/019_admin_cms.sql ; do
             echo "=== Applying $f ==="
             psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f "$f"
           done
