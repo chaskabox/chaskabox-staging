@@ -1,0 +1,14 @@
+name: Verify Migration 020
+on: workflow_dispatch
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Verify trigger function
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+        run: |
+          echo "=== Current handle_new_user function ==="
+          psql "$PROD_DB_URL" -t -c "SELECT pg_get_functiondef(oid) FROM pg_proc WHERE proname='handle_new_user';" 2>&1 | head -20
