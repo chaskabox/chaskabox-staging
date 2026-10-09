@@ -26,7 +26,7 @@ jobs:
           docker exec drill-postgres pg_isready -U postgres
           echo "Disposable PostgreSQL ready"
 
-      - name: Backup from staging
+      - name: Backup from staging (public schema only)
         env:
           DATABASE_URL: ${{ secrets.SUPABASE_DB_URL }}
         run: |
@@ -35,6 +35,7 @@ jobs:
           mkdir -p /tmp/drill
           docker run --rm -v /tmp/drill:/backup postgres:17-alpine \
             pg_dump "$DATABASE_URL" --format=custom --no-owner --no-privileges \
+            -n public \
             --file=/backup/staging.dump
           ls -lh /tmp/drill/staging.dump
           echo "BACKUP CREATED: PASS"
@@ -52,14 +53,10 @@ jobs:
           PGPASSWORD: drillpass
         run: |
           set -euo pipefail
-          # First, list what's in the dump
-          docker run --rm -v /tmp/drill:/backup postgres:17-alpine \
-            pg_restore -l /backup/staging.dump | head -30
-          echo "--- Starting restore ---"
           docker run --rm -v /tmp/drill:/backup --network host \
             -e PGPASSWORD=drillpass postgres:17-alpine \
             pg_restore -h localhost -U postgres -d drill_target \
-            --no-owner --no-privileges -v /backup/staging.dump 2>&1 | head -100
+            --no-owner --no-privileges /backup/staging.dump
           echo "DISPOSABLE RESTORE: PASS"
 
       - name: Verify schema and migrations
