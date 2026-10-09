@@ -48,7 +48,12 @@ jobs:
             "CREATE SCHEMA IF NOT EXISTS extensions;"
           docker exec drill-postgres psql -U postgres -d drill_target -c \
             "CREATE EXTENSION IF NOT EXISTS vector SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;"
-          echo "Supabase roles and extensions created"
+          # Minimal auth schema for FK references (Supabase auth.users)
+          docker exec drill-postgres psql -U postgres -d drill_target -c \
+            "CREATE SCHEMA IF NOT EXISTS auth; CREATE TABLE IF NOT EXISTS auth.users (id uuid PRIMARY KEY);"
+          docker exec drill-postgres psql -U postgres -d drill_target -c \
+            "CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid AS \$\$ SELECT '00000000-0000-0000-0000-000000000000'::uuid; \$\$ LANGUAGE sql STABLE;"
+          echo "Supabase roles, extensions, and minimal auth schema created"
 
       - name: Restore into disposable target
         env:
