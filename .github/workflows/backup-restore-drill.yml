@@ -39,6 +39,12 @@ jobs:
           ls -lh /tmp/drill/staging.dump
           echo "BACKUP CREATED: PASS"
 
+      - name: Create Supabase roles in disposable target
+        run: |
+          docker exec drill-postgres psql -U postgres -d drill_target -c \
+            "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN;"
+          echo "Supabase roles created"
+
       - name: Restore into disposable target
         env:
           PGPASSWORD: drillpass
