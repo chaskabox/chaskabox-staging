@@ -49,7 +49,8 @@ jobs:
             database/migrations/016_security_settings_hardening.sql \
             database/migrations/017_customer_notification_outbox.sql \
             database/migrations/018_public_surface_hardening.sql \
-            database/migrations/019_admin_cms.sql ; do
+            database/migrations/019_admin_cms.sql \
+            database/migrations/020_fix_auth_trigger_profiles.sql ; do
             echo "=== Applying $f ==="
             psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f "$f"
           done
