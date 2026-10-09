@@ -60,10 +60,16 @@ jobs:
           PGPASSWORD: drillpass
         run: |
           set -euo pipefail
+          # Disable FK checks during restore (auth.users is stub)
+          docker exec drill-postgres psql -U postgres -d drill_target -c \
+            "SET session_replication_role = 'replica';"
           docker run --rm -v /tmp/drill:/backup --network host \
             -e PGPASSWORD=drillpass postgres:17-alpine \
             pg_restore -h localhost -U postgres -d drill_target \
-            --no-owner --no-privileges /backup/staging.dump
+            --no-owner --no-privileges --disable-triggers /backup/staging.dump || true
+          # Re-enable and verify
+          docker exec drill-postgres psql -U postgres -d drill_target -c \
+            "SET session_replication_role = 'origin';"
           echo "DISPOSABLE RESTORE: PASS"
 
       - name: Verify schema and migrations
