@@ -52,10 +52,14 @@ jobs:
           PGPASSWORD: drillpass
         run: |
           set -euo pipefail
+          # First, list what's in the dump
+          docker run --rm -v /tmp/drill:/backup postgres:17-alpine \
+            pg_restore -l /backup/staging.dump | head -30
+          echo "--- Starting restore ---"
           docker run --rm -v /tmp/drill:/backup --network host \
             -e PGPASSWORD=drillpass postgres:17-alpine \
             pg_restore -h localhost -U postgres -d drill_target \
-            --no-owner --no-privileges /backup/staging.dump 2>&1 | tail -20
+            --no-owner --no-privileges -v /backup/staging.dump 2>&1 | head -100
           echo "DISPOSABLE RESTORE: PASS"
 
       - name: Verify schema and migrations
