@@ -11,13 +11,13 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - name: Start disposable PostgreSQL 17
+      - name: Start disposable PostgreSQL 17 (with pgvector)
         run: |
           docker run -d --name drill-postgres \
             -e POSTGRES_PASSWORD=drillpass \
             -e POSTGRES_DB=drill_target \
             -p 5432:5432 \
-            postgres:17-alpine
+            pgvector/pgvector:pg17
           echo "Waiting for PostgreSQL to start..."
           for i in $(seq 1 30); do
             docker exec drill-postgres pg_isready -U postgres && break
@@ -39,11 +39,13 @@ jobs:
           ls -lh /tmp/drill/staging.dump
           echo "BACKUP CREATED: PASS"
 
-      - name: Create Supabase roles in disposable target
+      - name: Create Supabase roles and extensions in disposable target
         run: |
           docker exec drill-postgres psql -U postgres -d drill_target -c \
             "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN;"
-          echo "Supabase roles created"
+          docker exec drill-postgres psql -U postgres -d drill_target -c \
+            "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+          echo "Supabase roles and extensions created"
 
       - name: Restore into disposable target
         env:
