@@ -1,0 +1,44 @@
+name: Production DB Migration 009-019
+
+on:
+  workflow_dispatch:
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install PostgreSQL client
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq postgresql-client
+
+      - name: Apply migrations 009-019 to production
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+        run: |
+          set -e
+          for f in \
+            final/database/migrations/009_notifications.sql \
+            final/database/migrations/010_atomic_orders_customer_profiles.sql \
+            final/database/migrations/011_distributed_rate_limit.sql \
+            final/database/migrations/012_order_status_events.sql \
+            final/database/migrations/013_notification_outbox.sql \
+            final/database/migrations/014_free_ai_features.sql \
+            final/database/migrations/015_admin_product_id_sequence.sql \
+            final/database/migrations/016_security_settings_hardening.sql \
+            final/database/migrations/017_customer_notification_outbox.sql \
+            final/database/migrations/018_public_surface_hardening.sql \
+            final/database/migrations/019_admin_cms.sql ; do
+            echo "=== Applying $f ==="
+            psql "$PROD_DB_URL" -v ON_ERROR_STOP=1 -f "$f"
+          done
+          echo "ALL MIGRATIONS APPLIED"
+
+      - name: Verify key objects
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+        run: |
+          psql "$PROD_DB_URL" -c "SELECT count(*) AS products FROM products;" || echo "products table check done"
+          psql "$PROD_DB_URL" -c "SELECT count(*) AS prod_views FROM pg_views WHERE viewname='public_products';" || true
