@@ -1,0 +1,17 @@
+name: Diagnose Trigger
+on: workflow_dispatch
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Check trigger function
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+        run: |
+          psql "$PROD_DB_URL" -c "
+          SELECT pg_get_triggerdef(oid) 
+          FROM pg_trigger 
+          WHERE tgname='on_auth_user_created';
+          " 2>&1 | head -10
