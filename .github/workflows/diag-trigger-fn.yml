@@ -1,0 +1,29 @@
+name: Diagnose Trigger Function
+on: workflow_dispatch
+jobs:
+  diag:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Install psql
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq postgresql-client
+      - name: Get trigger function source
+        env:
+          PROD_DB_URL: ${{ secrets.PROD_SUPABASE_DB_URL }}
+        run: |
+          echo "=== Trigger definition ==="
+          psql "$PROD_DB_URL" -c "
+          SELECT pg_get_triggerdef(t.oid) as def
+          FROM pg_trigger t
+          JOIN pg_class c ON t.tgrelid = c.oid
+          JOIN pg_namespace n ON c.relnamespace = n.oid
+          WHERE t.tgname = 'on_auth_user_created'
+          AND n.nspname = 'auth' AND c.relname = 'users';
+          " 2>&1
+          echo ""
+          echo "=== Trigger function source ==="
+          psql "$PROD_DB_URL" -c "
+          SELECT p.proname, pg_get_functiondef(p.oid)
+          FROM pg_proc p
+          JOIN pg_trigger t ON t.tgfoid = p.oid
+          WHERE t.tgname = 'on_auth_user_created';
+          " 2>&1 | head -50
