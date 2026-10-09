@@ -45,7 +45,9 @@ jobs:
           docker exec drill-postgres psql -U postgres -d drill_target -c \
             "CREATE ROLE anon NOLOGIN; CREATE ROLE authenticated NOLOGIN; CREATE ROLE service_role NOLOGIN;"
           docker exec drill-postgres psql -U postgres -d drill_target -c \
-            "CREATE EXTENSION IF NOT EXISTS vector; CREATE EXTENSION IF NOT EXISTS pgcrypto;"
+            "CREATE SCHEMA IF NOT EXISTS extensions;"
+          docker exec drill-postgres psql -U postgres -d drill_target -c \
+            "CREATE EXTENSION IF NOT EXISTS vector SCHEMA extensions; CREATE EXTENSION IF NOT EXISTS pgcrypto SCHEMA extensions;"
           echo "Supabase roles and extensions created"
 
       - name: Restore into disposable target
